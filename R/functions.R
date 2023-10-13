@@ -20,7 +20,7 @@ rmse <- function(x,y){
 optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, eta = seq(0.025,0.2,0.025), 
                          nrounds = c(20,40,70,100,130,160,200), nthread = detectCores()-1, 
                          objective = "reg:squarederror", bt = FALSE){
-  
+  time1 <- as.numeric(Sys.time())
   if (bt[1] == 0) {
     
     k <- 0
@@ -203,7 +203,8 @@ optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, 
     }
     
   }
-  
+  print(paste("optimization completed in: ", as.numeric(Sys.time()-time1)%/%60, " minutes ",
+              round(as.numeric(Sys.time()-time1)%%60, digits = 1), " seconds"))
   return(opt_result)
 }
 
