@@ -731,11 +731,14 @@ rmse[k] <- sqrt(mean((pre_xgb-highdata[valid.h])^2))
 
 source("functions.R")
 
-test <- optimize_xgb(data = as.matrix(h.data.calib[,3:27]),label = h.data.calib[,2],
+calib.h <- 61:14549
+valid.h <- 9133:14549 #14610
+
+test1 <- optimize_xgb(data = as.matrix(h.data.calib[,3:27]),label = h.data.calib[,2],
                      vdata = as.matrix(h.data[valid.h,3:27]), vlabel = h.data[valid.h,2])
 
-test <- optimize_xgb(data = as.matrix(h.data.calib[,3:27]),label = h.data.calib[,2],
-                     bt = c(10,0.75))
+test2 <- optimize_xgb(data = as.matrix(h.data[calib.h,3:27]),label = h.data[calib.h,2],
+                     bt = c(3,0.8))
 
 pxgb1 <- predict(object = test[[1]], newdata = as.matrix(h.data[valid.h,3:27]))
 
@@ -758,17 +761,6 @@ xgb.plot.deepness(test[[1]])
 xgb.plot.importance(xgb.importance(model=test[[1]]))
 xgb.plot.multi.trees(test[[1]])
 xgb.plot.shap.summary(data=as.matrix(h.data[calib.h,-c(1,2)]), model=test[[1]])
-
-
-
-
-
-
-
-
-bt_sample <- as.logical(rbinom(n = length(h.data.calib), size = 1, prob =0.75))
-h.data.calib[bt_sample,2]
-
 
 
 

@@ -111,8 +111,17 @@ optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, 
     if(!(bt[1]<1|bt[2]<=0|bt[2]>=1)){simpleError("bt not in format c(nrounds (x>0),proportion of used data (0<x>1))")}
     
     k <- 0
+    start <- c(1,1)
     numNA <- length(max.depth)*length(nrounds)*length(eta)*bt[1]
-    b_rmse <- matrix(NA, numNA,bt[1])
+    b_rmse <- matrix(NA, nrow = numNA, ncol = bt[1])
+    bt_sample <- matrix(TRUE, nrow = nrow(data), ncol = bt[1])
+    start.stop <- c(1,1)
+    for (i in 1:bt[1]) {
+      start.stop[1] <- runif(n=1, min=1, max=floor(nrow(data)*bt[2]))
+      start.stop[2] <- start.stop[1]+floor(nrow(data)*(1-bt[2]))
+      bt_sample[start.stop[1]:start.stop[2],i] <- FALSE
+    }
+    
     s_maxdepth <- rep(NA, numNA)
     s_nrounds <- rep(NA, numNA)
     s_eta <- rep(NA, numNA)
@@ -128,14 +137,14 @@ optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, 
           s_eta[k] <- eta[e]
           
           for (b in 1:bt[1]) {
-            bt_sample <- as.logical(rbinom(n = nrow(data), size = 1, prob = bt[2]))
-            xgb_mod <- xgboost(data = as.matrix(data[bt_sample,]), label = label[bt_sample], 
+            # bt_sample <- as.logical(rbinom(n = nrow(data), size = 1, prob = bt[2]))
+            xgb_mod <- xgboost(data = as.matrix(data[bt_sample[,b],]), label = label[bt_sample[,b]], 
                                max.depth = i, eta = eta[e], 
                                nrounds = j, nthread = nthread, objective = objective)
-            pre_xgb <- predict(object = xgb_mod, newdata = as.matrix(data[!bt_sample,]))
+            pre_xgb <- predict(object = xgb_mod, newdata = as.matrix(data[!bt_sample[,b],]))
             
             
-            b_rmse[k,b] <- sqrt(mean((pre_xgb-data[!bt_sample])^2))
+            b_rmse[k,b] <- sqrt(mean((pre_xgb-data[!bt_sample[,b]])^2))
           }
           
         }
@@ -143,9 +152,8 @@ optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, 
     }
     
     s_rmse <- apply(b_rmse, MARGIN = 1, FUN = mean)
-    best <- which(min(s_rmse, na.rm = TRUE)==s_rmse)
-    
-    rmse_opt <- b_rmse[best]
+    best <- match(min(s_rmse, na.rm = TRUE),s_rmse)
+    rmse_opt <- b_rmse[best,]
     maxdepth_opt <- s_maxdepth[best]
     nrounds_opt <- s_nrounds[best]
     eta_opt <- s_eta[best]
@@ -181,24 +189,26 @@ optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, 
       for (i in nrounds.2) {
         k <- k+1
         for (b in 1:bt[1]) {
-          bt_sample <- as.logical(rbinom(n = nrow(data), size = 1, prob = bt[2]))
+          # bt_sample <- as.logical(rbinom(n = nrow(data), size = 1, prob = bt[2]))
           
-          xgb_mod <- xgboost(data = as.matrix(data[bt_sample,]), label = label[bt_sample], 
+          xgb_mod <- xgboost(data = as.matrix(data[bt_sample[,b],]), label = label[bt_sample[,b]], 
                              max.depth = s_maxdepth,
-                             eta = s_eta, nrounds = s_nrounds, nthread = nthread,objective = objective)
-          pre_xgb <- predict(object = xgb_mod, newdata = as.matrix(data[!bt_sample]))
+                             eta = s_eta, nrounds = i, nthread = nthread,objective = objective)
+          pre_xgb <- predict(object = xgb_mod, newdata = as.matrix(data[!bt_sample[,b]]))
           
           
-          b_rmse[k,b] <- sqrt(mean((pre_xgb-data[!bt_sample,])^2))
+          b_rmse[k,b] <- sqrt(mean((pre_xgb-data[!bt_sample[,b],])^2))
         }
       }
       
       s_rmse <- apply(b_rmse, MARGIN = 1, FUN = mean)
-      rmse_opt <-  b_rmse[which(min(s_rmse, na.rm = TRUE)==s_rmse)]
+      rmse_opt <-  b_rmse[match(min(s_rmse, na.rm = TRUE),s_rmse),]
+      nrounds_opt <- nrounds.2[match(min(s_rmse, na.rm = TRUE),s_rmse)]
       xgb_opt <- xgboost(data = data, label = label, max.depth = maxdepth_opt, eta = eta_opt, 
                          nrounds = nrounds_opt, nthread = nthread, objective = objective)
       
       opt_result <- list(xgb_opt,rmse_opt,maxdepth_opt,nrounds_opt,eta_opt)
+      print(best)
       
     }
     
