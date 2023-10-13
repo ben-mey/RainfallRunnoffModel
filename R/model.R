@@ -738,9 +738,9 @@ test1 <- optimize_xgb(data = as.matrix(h.data.calib[,3:27]),label = h.data.calib
                      vdata = as.matrix(h.data[valid.h,3:27]), vlabel = h.data[valid.h,2])
 
 test2 <- optimize_xgb(data = as.matrix(h.data[calib.h,3:27]),label = h.data[calib.h,2],
-                     bt = c(3,0.8))
+                     bt = c(3,0.75))
 
-pxgb1 <- predict(object = test[[1]], newdata = as.matrix(h.data[valid.h,3:27]))
+pxgb1 <- predict(object = test2[[1]], newdata = as.matrix(h.data[valid.h,3:27]))
 
 
 maxy <- max(pxgb1,h.data$discharge_vol.m3.s.[valid.h])*1.1

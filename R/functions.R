@@ -112,7 +112,7 @@ optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, 
     
     k <- 0
     start <- c(1,1)
-    numNA <- length(max.depth)*length(nrounds)*length(eta)*bt[1]
+    numNA <- length(max.depth)*length(nrounds)*length(eta)
     b_rmse <- matrix(NA, nrow = numNA, ncol = bt[1])
     bt_sample <- matrix(TRUE, nrow = nrow(data), ncol = bt[1])
     start.stop <- c(1,1)
@@ -157,13 +157,13 @@ optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, 
     maxdepth_opt <- s_maxdepth[best]
     nrounds_opt <- s_nrounds[best]
     eta_opt <- s_eta[best]
-    
+    debu <- b_rmse
     if (nrounds_opt == tail(nrounds, n=1)) {
       
       xgb_opt <- xgboost(data = data, label = label, max.depth = maxdepth_opt, eta = eta_opt, 
                          nrounds = nrounds_opt, nthread = nthread, objective = objective)
       
-      opt_result <- list(xgb_opt,rmse_opt,maxdepth_opt,nrounds_opt,eta_opt)
+      opt_result <- list(xgb_opt,rmse_opt,maxdepth_opt,nrounds_opt,eta_opt,debu)
       
     }
     
@@ -207,7 +207,7 @@ optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, 
       xgb_opt <- xgboost(data = data, label = label, max.depth = maxdepth_opt, eta = eta_opt, 
                          nrounds = nrounds_opt, nthread = nthread, objective = objective)
       
-      opt_result <- list(xgb_opt,rmse_opt,maxdepth_opt,nrounds_opt,eta_opt)
+      opt_result <- list(xgb_opt,rmse_opt,maxdepth_opt,nrounds_opt,eta_opt,debu)
       print(best)
       
     }
@@ -219,3 +219,4 @@ optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, 
 }
 
 
+test2[6]
