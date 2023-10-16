@@ -737,30 +737,35 @@ valid.h <- 9133:14549 #14610
 test1 <- optimize_xgb(data = as.matrix(h.data.calib[,3:27]),label = h.data.calib[,2],
                      vdata = as.matrix(h.data[valid.h,3:27]), vlabel = h.data[valid.h,2])
 
+save(file = "../Results/test1.R", test1)
+
 test2 <- optimize_xgb(data = as.matrix(h.data[calib.h,3:27]),label = h.data[calib.h,2],
                      bt = c(3,0.75))
 
-pxgb1 <- predict(object = test2[[1]], newdata = as.matrix(h.data[valid.h,3:27]))
-
+pxgb1 <- predict(object = test1[[1]], newdata = as.matrix(h.data[valid.h,3:27]))
 
 maxy <- max(pxgb1,h.data$discharge_vol.m3.s.[valid.h])*1.1
 miny <- min(pxgb1-h.data$discharge_vol.m3.s.[valid.h])*1.1
-plot(pxgb1, type = "l", col="darkgreen", ylim = c(miny,maxy), main = "main")
+
+pdf(file = "../Results/Model_Validation_test1.pdf", width = 14, height = 7)
+plot(pxgb1, type = "l", col="darkgreen", ylim = c(miny,maxy), main = "main", ylab = "Discharge")
 lines(h.data$discharge_vol.m3.s.[valid.h], col="blue")
 lines(pxgb1-h.data$discharge_vol.m3.s.[valid.h], col="red")
 abline(h=0)
 legend("topright", legend = c("model", "data", "model - data"), bty = "n", 
        lty = 1, col = c("darkgreen", "blue", "red"))
+dev.off()
 
 mean(pxgb1)
 mean(h.data$discharge_vol.m3.s.[valid.h])
 NSE(sim = as.matrix(pxgb1), obs = as.matrix(h.data$discharge_vol.m3.s.[valid.h]))
 KGE(sim = as.matrix(pxgb1), obs = as.matrix(h.data$discharge_vol.m3.s.[valid.h]))
 
-xgb.plot.deepness(test[[1]])
-xgb.plot.importance(xgb.importance(model=test[[1]]))
-xgb.plot.multi.trees(test[[1]])
-xgb.plot.shap.summary(data=as.matrix(h.data[calib.h,-c(1,2)]), model=test[[1]])
+pdf(file = "../Results/XGB_Model_test1.pdf", width = 7, height = 7)
+xgb.plot.deepness(test1[[1]])
+xgb.plot.importance(xgb.importance(model=test1[[1]]))
+xgb.plot.shap.summary(data=as.matrix(h.data[calib.h,-c(1,2)]), model=test1[[1]])
+dev.off()
 
-
+xgb.plot.multi.trees(test1[[1]])
 

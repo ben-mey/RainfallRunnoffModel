@@ -219,4 +219,3 @@ optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, 
 }
 
 
-test2[6]
