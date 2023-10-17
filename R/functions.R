@@ -219,3 +219,120 @@ optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, 
 }
 
 
+
+
+
+
+
+
+
+bayesOpt_xgb <- function(data, 
+                         label, 
+                         max_depth = c(2L,12L), 
+                         eta = c(0.001,0.25),
+                         alpha = c(1,12),
+                         lambda = c(1,12),
+                         min_child_weight = c(1,50),
+                         nrounds = 200,
+                         nfold = 5,
+                         iters.n = 10)
+  {
+  obj_func <- function(eta, max_depth, min_child_weight, lambda, alpha) { 
+    
+    param <- list(
+      
+      # Hyter parameters 
+      eta = eta,
+      max_depth = max_depth,
+      min_child_weight = min_child_weight,
+      lambda = lambda,
+      alpha = alpha,
+      
+      # Tree model 
+      booster = "gbtree",
+      
+      # Regression problem 
+      objective = "reg:squarederror",
+      
+      # Use the Mean Absolute Percentage Error
+      eval_metric = "rmse")
+    
+    xgbcv <- xgb.cv(params = param,
+                    data = data,
+                    label = label,
+                    nround = nrounds,
+                    nfold = nfold,
+                    prediction = TRUE,
+                    early_stopping_rounds = 5,
+                    verbose = 0,
+                    maximize = F,
+                    nthread = detectCores())
+    
+    lst <- list(
+      
+      # First argument must be named as "Score"
+      # Function finds maxima so inverting the output
+      Score = -min(xgbcv$evaluation_log$test_rmse_mean),
+      
+      # Get number of trees for the best performing model
+      nrounds = xgbcv$best_iteration
+    )
+    
+    return(lst)
+  }
+  
+  
+  
+  
+  
+  bounds <- list(eta = eta,
+                 max_depth = max_depth
+                 ,min_child_weight = min_child_weight
+                 ,lambda = lambda
+                 ,alpha = alpha
+  )
+  
+  
+  
+  
+  set.seed(1234)
+  bayes_out <- bayesOpt(FUN = obj_func, bounds = bounds, initPoints = 8, iters.n = iters.n)
+  
+  data.frame(getBestPars(bayes_out))
+  
+  
+  
+  # Combine best params with base params
+  opt_params <- append(list(booster = "gbtree", 
+                            objective = "reg:squarederror", 
+                            eval_metric = "rmse"), 
+                       getBestPars(bayes_out))
+  
+  # Run cross validation 
+  xgbcv <- xgb.cv(params = opt_params,
+                  data = data,
+                  label = label,
+                  nround = nrounds,
+                  folds = folds,
+                  prediction = TRUE,
+                  early_stopping_rounds = 5,
+                  verbose = 0,
+                  maximize = F)
+  
+  # Get optimal number of rounds
+  nrounds = xgbcv$best_iteration
+  
+  # Fit a xgb model
+  opt_mdl <- xgboost(data = X, label = y, 
+                 params = opt_params, 
+                 maximize = F, 
+                 early_stopping_rounds = 5, 
+                 nrounds = nrounds, 
+                 verbose = 0)
+  
+  output_list <- append(x=opt_params,nrounds,opt_mdl)
+
+  return(output_list)
+}
+  
+  

@@ -38,6 +38,12 @@ if(!'parallel'%in%installed.packages()){
   install.packages('parallel')
 }
 
+
+if(!'ParBayesianOptimization'%in%installed.packages()){
+  install.packages('ParBayesianOptimization')
+}
+
+
 rm(list=ls())
 gc()
 
@@ -55,6 +61,7 @@ library(DiagrammeR)
 library(hydroGOF)
 library(tseries)
 library(parallel)
+library(ParBayesianOptimization)
 
 wd <- getSourceEditorContext()$path
 wd <- substring(wd, first = 1 , last = tail(unlist(gregexpr('/', wd)), n=1)-1)
@@ -70,16 +77,16 @@ source("functions.R")
 #                      header = TRUE, sep = ";")
 
 # Thur Andelfingen
-data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2044.txt",
-                   header = TRUE, sep = ";")
+# data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2044.txt",
+#                    header = TRUE, sep = ";")
 
 # Massa Blatten bei Naters
 # data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2161.txt",
 #                    header = TRUE, sep = ";")
 
 # Weisse Lütschine Zweilütschinen
-# data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2200.txt",
-#                    header = TRUE, sep = ";")
+data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2200.txt",
+                   header = TRUE, sep = ";")
 
 # Dischmabach Davos
 # data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2327.txt",
@@ -233,10 +240,10 @@ h.data.lstm_val <- dataPrepLSTM(data = h.data.scale[valid.h,], lag = 10)
 lstm_mod <- keras_model_sequential()
 lstm_mod <- layer_lstm(object = lstm_mod, units = 10, return_sequences = TRUE) %>% #, return_sequences = TRUE
 # layer_dropout(rate = 0.1) %>%
-layer_lstm(units = 10, return_sequences = TRUE) %>%
-layer_lstm(units = 10) %>%
+layer_lstm(units = 20, return_sequences = TRUE) %>%
+layer_lstm(units = 20) %>%
   layer_dense(units = 1)
-compile(lstm_mod, optimizer = "rmsprop", loss = "mse", metrics = "mse")
+compile(lstm_mod, optimizer = "adam", loss = "mse", metrics = "mse") # optimizer = "adam" / "rmsprop"
 
 
 
@@ -273,7 +280,7 @@ pre_lstm <- predict(object = lstm_mod, x = h.data.lstm_val[,,-1])
 
 me <- mean(h.data$discharge_vol.m3.s.)
 std <- sd(h.data$discharge_vol.m3.s.)
-rmse(h.data$discharge_vol.m3.s.[9142:14610],pre_lstm*std+me) # 2040 *50.3518+46.78827  2020 *60.357+65.206
+rmse(h.data$discharge_vol.m3.s.[9142:14610],pre_lstm*std+me) # 2040 *50.3518+46.78827  2020 *60.357+65.206 [9142:14610]
 
 maxy <- max(pre_lstm*std+me,h.data$discharge_vol.m3.s.[9142:14610])
 miny <- min(pre_lstm*std+me-h.data$discharge_vol.m3.s.[9142:14610])
@@ -731,8 +738,8 @@ rmse[k] <- sqrt(mean((pre_xgb-highdata[valid.h])^2))
 
 source("functions.R")
 
-calib.h <- 61:14549
-valid.h <- 9133:14549 #14610
+calib.h <- 61:13200
+valid.h <- 13201:14549 #14610
 
 test1 <- optimize_xgb(data = as.matrix(h.data.calib[,3:27]),label = h.data.calib[,2],
                      vdata = as.matrix(h.data[valid.h,3:27]), vlabel = h.data[valid.h,2])
@@ -768,4 +775,151 @@ xgb.plot.shap.summary(data=as.matrix(h.data[calib.h,-c(1,2)]), model=test1[[1]])
 dev.off()
 
 xgb.plot.multi.trees(test1[[1]])
+
+
+
+#############################################################
+#############################################################
+#############################################################
+#############################################################
+
+
+X <- as.matrix(h.data[calib.h,3:27])
+# Get the target variable
+y <- h.data[calib.h,2]
+# Cross validation folds
+# folds <- list(fold1 = as.integer(seq(1, nrow(X), by = 5)),
+              # fold2 = as.integer(seq(2, nrow(X), by = 5)),
+              # fold3 = as.integer(seq(3, nrow(X), by = 5)))
+
+
+
+
+# Function must take the hyper-parameters as inputs
+obj_func <- function(eta, max_depth, min_child_weight, lambda, alpha) { #, min_child_weight, subsample, lambda, alpha
+  
+  param <- list(
+    
+    # Hyter parameters 
+    eta = eta,
+    max_depth = max_depth,
+    min_child_weight = min_child_weight,
+    # subsample = subsample,
+    lambda = lambda,
+    alpha = alpha,
+    
+    # Tree model 
+    booster = "gbtree",
+    
+    # Regression problem 
+    objective = "reg:squarederror",
+    
+    # Use the Mean Absolute Percentage Error
+    eval_metric = "rmse")
+  
+  xgbcv <- xgb.cv(params = param,
+                  data = X,
+                  label = y,
+                  nround = 200,
+                  nfold = 5,
+                  # folds = folds,
+                  prediction = TRUE,
+                  early_stopping_rounds = 5,
+                  verbose = 0,
+                  maximize = F,
+                  nthread = 20)
+  
+  lst <- list(
+    
+    # First argument must be named as "Score"
+    # Function finds maxima so inverting the output
+    Score = -min(xgbcv$evaluation_log$test_rmse_mean),
+    
+    # Get number of trees for the best performing model
+    nrounds = xgbcv$best_iteration
+  )
+  
+  return(lst)
+}
+
+
+
+
+
+bounds <- list(eta = c(0.001, 0.25),
+               max_depth = c(2L, 12L)
+               ,min_child_weight = c(1, 50)
+               # ,subsample = c(0.1, 1)
+               ,lambda = c(1, 12)
+               ,alpha = c(1, 12)
+               )
+
+
+
+
+set.seed(1234)
+bayes_out <- bayesOpt(FUN = obj_func, bounds = bounds, initPoints = length(bounds) + 2, iters.n = 10)
+
+bayes_out$scoreSummary[,-ncol(bayes_out$scoreSummary)] #[, c(3:8, 13)]
+data.frame(getBestPars(bayes_out))
+
+
+
+# Combine best params with base params
+opt_params <- append(list(booster = "gbtree", 
+                          objective = "reg:squarederror", 
+                          eval_metric = "rmse"), 
+                     getBestPars(bayes_out))
+
+# Run cross validation 
+xgbcv <- xgb.cv(params = opt_params,
+                data = X,
+                label = y,
+                nround = 200,
+                folds = folds,
+                prediction = TRUE,
+                early_stopping_rounds = 5,
+                verbose = 0,
+                maximize = F)
+
+# Get optimal number of rounds
+nrounds = xgbcv$best_iteration
+
+# Fit a xgb model
+mdl <- xgboost(data = X, label = y, 
+               params = opt_params, 
+               maximize = F, 
+               early_stopping_rounds = 5, 
+               nrounds = nrounds, 
+               verbose = 0)
+
+
+
+source("functions.R")
+mdl <- bayesOpt_xgb(data = as.matrix(h.data[calib.h,3:27]), label = h.data[calib.h,2])
+
+
+pxgb1 <- predict(object = mdl, newdata = as.matrix(h.data[valid.h,3:27]))
+
+maxy <- max(pxgb1,h.data$discharge_vol.m3.s.[valid.h])*1.1
+miny <- min(pxgb1-h.data$discharge_vol.m3.s.[valid.h])*1.1
+
+
+plot(pxgb1, type = "l", col="darkgreen", ylim = c(miny,maxy), main = "main", ylab = "Discharge")
+lines(h.data$discharge_vol.m3.s.[valid.h], col="blue")
+lines(pxgb1-h.data$discharge_vol.m3.s.[valid.h], col="red")
+abline(h=0)
+legend("topright", legend = c("model", "data", "model - data"), bty = "n", 
+       lty = 1, col = c("darkgreen", "blue", "red"))
+
+
+mean(pxgb1)
+mean(h.data$discharge_vol.m3.s.[valid.h])
+NSE(sim = as.matrix(pxgb1), obs = as.matrix(h.data$discharge_vol.m3.s.[valid.h]))
+KGE(sim = as.matrix(pxgb1), obs = as.matrix(h.data$discharge_vol.m3.s.[valid.h]))
+
+
+xgb.plot.deepness(mdl)
+xgb.plot.importance(xgb.importance(model=mdl))
+xgb.plot.shap.summary(data=as.matrix(h.data[calib.h,-c(1,2)]), model=mdl)
 
