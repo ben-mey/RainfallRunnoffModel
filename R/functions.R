@@ -298,9 +298,6 @@ bayesOpt_xgb <- function(data,
   set.seed(1234)
   bayes_out <- bayesOpt(FUN = obj_func, bounds = bounds, initPoints = 8, iters.n = iters.n)
   
-  data.frame(getBestPars(bayes_out))
-  
-  
   
   # Combine best params with base params
   opt_params <- append(list(booster = "gbtree", 
@@ -323,14 +320,15 @@ bayesOpt_xgb <- function(data,
   nrounds = xgbcv$best_iteration
   
   # Fit a xgb model
-  opt_mdl <- xgboost(data = X, label = y, 
+  opt_mdl <- xgboost(data = data, label = label, 
                  params = opt_params, 
                  maximize = F, 
                  early_stopping_rounds = 5, 
                  nrounds = nrounds, 
                  verbose = 0)
   
-  output_list <- append(x=opt_params,nrounds,opt_mdl)
+  output_list <- list(optimized_param = data.frame(getBestPars(bayes_out),nrounds),
+                      optimized_mod = opt_mdl)
 
   return(output_list)
 }

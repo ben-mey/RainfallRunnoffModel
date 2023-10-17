@@ -899,7 +899,7 @@ source("functions.R")
 mdl <- bayesOpt_xgb(data = as.matrix(h.data[calib.h,3:27]), label = h.data[calib.h,2])
 
 
-pxgb1 <- predict(object = mdl, newdata = as.matrix(h.data[valid.h,3:27]))
+pxgb1 <- predict(object = mdl[[2]], newdata = as.matrix(h.data[valid.h,3:27]))
 
 maxy <- max(pxgb1,h.data$discharge_vol.m3.s.[valid.h])*1.1
 miny <- min(pxgb1-h.data$discharge_vol.m3.s.[valid.h])*1.1
@@ -919,7 +919,7 @@ NSE(sim = as.matrix(pxgb1), obs = as.matrix(h.data$discharge_vol.m3.s.[valid.h])
 KGE(sim = as.matrix(pxgb1), obs = as.matrix(h.data$discharge_vol.m3.s.[valid.h]))
 
 
-xgb.plot.deepness(mdl)
-xgb.plot.importance(xgb.importance(model=mdl))
+xgb.plot.deepness(mdl[[2]])
+xgb.plot.importance(xgb.importance(model=mdl[[2]]))
 xgb.plot.shap.summary(data=as.matrix(h.data[calib.h,-c(1,2)]), model=mdl)
 
