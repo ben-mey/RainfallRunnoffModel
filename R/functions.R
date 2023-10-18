@@ -235,8 +235,10 @@ bayesOpt_xgb <- function(data,
                          min_child_weight = c(1,50),
                          nrounds = 200,
                          nfold = 5,
-                         iters.n = 10)
-  {
+                         iters.n = 10){
+  
+  time1 <- as.numeric(Sys.time())
+  
   obj_func <- function(eta, max_depth, min_child_weight, lambda, alpha) { 
     
     param <- list(
@@ -330,6 +332,8 @@ bayesOpt_xgb <- function(data,
   output_list <- list(optimized_param = data.frame(getBestPars(bayes_out),nrounds),
                       optimized_mod = opt_mdl)
 
+  print(paste("optimization completed in: ", as.numeric(Sys.time()-time1)%/%60, " minutes ",
+              round(as.numeric(Sys.time()-time1)%%60, digits = 1), " seconds"))
   return(output_list)
 }
   

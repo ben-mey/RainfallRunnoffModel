@@ -52,13 +52,13 @@ library(rstudioapi)
 library(xgboost)
 #library(transformer)
 #library(attention)
-library(tensorflow) #read documentation for installation
+library(tensorflow) #read documentation for installation https://tensorflow.rstudio.com/install/
 library(keras) #read documentation for installation
 #library(wateRtemp)
 library(data.table)
 library(igraph)
 library(DiagrammeR)
-library(hydroGOF)
+library(hydroGOF) # archived because dependency hydroTSM was archived
 library(tseries)
 library(parallel)
 library(ParBayesianOptimization)
@@ -94,6 +94,24 @@ data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_22
 
 
 h.data <- data[,c(1,2,5,6)]
+dat <- strptime(data$date, format = "%Y-%m-%d")
+dat.y <- as.numeric(format(dat, "%Y"))
+even <- rep(FALSE,length(dat))
+even[61:14549] <- dat.y[61:14549]%%2 == 0
+skp <- 1
+count <- 0
+skipunreg <- NA
+for (i in 1981:2020) {
+  count <- count + 1
+  if (skp!=3) {skipunreg[count]<-i; skp <- skp + 1}
+  else {skp <- 1}
+}
+skipunreg <- skipunreg[!is.na(skipunreg)]
+skipunreg <- dat.y%in%skipunreg
+valid2 <- rep(FALSE, length(dat.y))
+valid2[61:14549] <- skipunreg[61:14549]
+nvalid2 <- rep(FALSE, length(dat.y))
+nvalid2[61:14549] <- !valid2[61:14549]
 
 h.data$lag1preci <- shift(x=h.data$precipitation.mm.d.,n=1, type= "lag")
 h.data$lag2preci <- shift(x=h.data$precipitation.mm.d.,n=2, type= "lag")
@@ -615,57 +633,15 @@ xgb.plot.shap.summary(data=as.matrix(h.data[calib.h,-c(1,2)]), model=xgb_mod1)
 ##############################################
 
 
-lowdata <- filter$lowpass61
-highdata <- filter$highpass61
+lowdata <- filter$lowpass46
+highdata <- filter$highpass46
 
 
-maxdepth <- 3:8
-nrounds <- c(5,10,20,40,60,80,100,130,150)
-# nrounds <- 150:180
-eta <- seq(0.025,0.2,0.025)
-k <- 0
-numNA <- length(maxdepth)*length(nrounds)*length(eta)
-rmse <- rep(NA, numNA)
-s_maxdepth <- rep(NA, numNA)
-s_nrounds <- rep(NA, numNA)
-s_eta <- rep(NA, numNA)
-s_gam <- rep(NA, numNA)
+xgb_lowp1 <- bayesOpt_xgb(data = as.matrix(h.data[calib.h,3:27]), label = lowdata[calib.h])
+pxgb_lp1 <- predict(object = xgb_lowp1[[2]], newdata = as.matrix(h.data[valid.h,3:27]))
 
-
-for (i in maxdepth) {
-  for (j in nrounds) {
-    for (e in 1:length(eta)) {
-      
-      k <- k+1
-      
-      xgb_mod <- xgboost(data = as.matrix(h.data[calib.h,3:27]), label = highdata[calib.h], 
-                         max.depth = i, eta = eta[e], nrounds = j, nthread = 20,objective = "reg:squarederror")
-      pre_xgb <- predict(object = xgb_mod, newdata = as.matrix(h.data[valid.h,3:27]))
-      
-      
-      rmse[k] <- sqrt(mean((pre_xgb-highdata[valid.h])^2)) 
-      s_maxdepth[k] <- i
-      s_nrounds[k] <- j
-      s_eta[k] <- eta[e]
-      
-    }
-  }
-}
-
-best <- which(min(rmse, na.rm = TRUE)==rmse)
-rmse[best]
-s_maxdepth[best]
-s_nrounds[best]
-s_eta[best]
-
-xgb_lowp1 <- xgboost(data = as.matrix(h.data[calib.h,3:27]), label = lowdata[calib.h],
-                    max.depth = 3, eta = 0.125, nrounds = 150, nthread = 16, objective = "reg:squarederror")
-pxgb_lp1 <- predict(object = xgb_lowp1, newdata = as.matrix(h.data[valid.h,3:27]))
-
-xgb_highp1 <- xgboost(data = as.matrix(h.data[calib.h,3:27]), label = highdata[calib.h],
-                     max.depth = 6, eta = 0.075, nrounds = 150, nthread = 16, objective = "reg:squarederror")
-pxgb_hp1 <- predict(object = xgb_highp1, newdata = as.matrix(h.data[valid.h,3:27]))
-
+xgb_highp1 <- bayesOpt_xgb(data = as.matrix(h.data[calib.h,3:27]), label = highdata[calib.h])
+pxgb_hp1 <- predict(object = xgb_highp1[[2]], newdata = as.matrix(h.data[valid.h,3:27]))
 
 
 maxy <- max(pxgb_lp1,lowdata[valid.h])*1.1
@@ -684,9 +660,7 @@ KGE(sim = as.matrix(pxgb_lp1), obs = as.matrix(lowdata[valid.h]))
 
 xgb.plot.deepness(xgb_lowp1)
 xgb.plot.importance(xgb.importance(model=xgb_lowp1))
-xgb.plot.multi.trees(xgb_lowp1)
 xgb.plot.shap.summary(data=as.matrix(h.data[calib.h,-c(1,2)]), model=xgb_lowp1)
-
 
 
 
@@ -706,7 +680,6 @@ KGE(sim = as.matrix(pxgb_hp1), obs = as.matrix(highdata[valid.h]))
 
 xgb.plot.deepness(xgb_highp1)
 xgb.plot.importance(xgb.importance(model=xgb_highp1))
-xgb.plot.multi.trees(xgb_highp1)
 xgb.plot.shap.summary(data=as.matrix(h.data[calib.h,-c(1,2)]), model=xgb_highp1)
 
 
@@ -787,11 +760,6 @@ xgb.plot.multi.trees(test1[[1]])
 X <- as.matrix(h.data[calib.h,3:27])
 # Get the target variable
 y <- h.data[calib.h,2]
-# Cross validation folds
-# folds <- list(fold1 = as.integer(seq(1, nrow(X), by = 5)),
-              # fold2 = as.integer(seq(2, nrow(X), by = 5)),
-              # fold3 = as.integer(seq(3, nrow(X), by = 5)))
-
 
 
 
@@ -896,27 +864,27 @@ mdl <- xgboost(data = X, label = y,
 
 
 source("functions.R")
-mdl <- bayesOpt_xgb(data = as.matrix(h.data[calib.h,3:27]), label = h.data[calib.h,2])
+mdl <- bayesOpt_xgb(data = as.matrix(h.data[valid2,3:27]), label = h.data[valid2,2])
 
 
-pxgb1 <- predict(object = mdl[[2]], newdata = as.matrix(h.data[valid.h,3:27]))
+pxgb1 <- predict(object = mdl[[2]], newdata = as.matrix(h.data[nvalid2,3:27]))
 
-maxy <- max(pxgb1,h.data$discharge_vol.m3.s.[valid.h])*1.1
-miny <- min(pxgb1-h.data$discharge_vol.m3.s.[valid.h])*1.1
+maxy <- max(pxgb1,h.data$discharge_vol.m3.s.[nvalid2])*1.1
+miny <- min(pxgb1-h.data$discharge_vol.m3.s.[nvalid2])*1.1
 
 
 plot(pxgb1, type = "l", col="darkgreen", ylim = c(miny,maxy), main = "main", ylab = "Discharge")
-lines(h.data$discharge_vol.m3.s.[valid.h], col="blue")
-lines(pxgb1-h.data$discharge_vol.m3.s.[valid.h], col="red")
+lines(h.data$discharge_vol.m3.s.[nvalid2], col="blue")
+lines(pxgb1-h.data$discharge_vol.m3.s.[nvalid2], col="red")
 abline(h=0)
 legend("topright", legend = c("model", "data", "model - data"), bty = "n", 
        lty = 1, col = c("darkgreen", "blue", "red"))
 
 
 mean(pxgb1)
-mean(h.data$discharge_vol.m3.s.[valid.h])
-NSE(sim = as.matrix(pxgb1), obs = as.matrix(h.data$discharge_vol.m3.s.[valid.h]))
-KGE(sim = as.matrix(pxgb1), obs = as.matrix(h.data$discharge_vol.m3.s.[valid.h]))
+mean(h.data$discharge_vol.m3.s.[nvalid2])
+NSE(sim = as.matrix(pxgb1), obs = as.matrix(h.data$discharge_vol.m3.s.[nvalid2]))
+KGE(sim = as.matrix(pxgb1), obs = as.matrix(h.data$discharge_vol.m3.s.[nvalid2]))
 
 
 xgb.plot.deepness(mdl[[2]])
