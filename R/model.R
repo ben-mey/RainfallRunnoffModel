@@ -44,6 +44,10 @@ if(!'ParBayesianOptimization'%in%installed.packages()){
 }
 
 
+if(!'lightgbm'%in%installed.packages()){
+  install.packages('lightgbm')
+}
+
 rm(list=ls())
 gc()
 
@@ -62,6 +66,7 @@ library(hydroGOF) # archived because dependency hydroTSM was archived
 library(tseries)
 library(parallel)
 library(ParBayesianOptimization)
+library(lightgbm)
 
 wd <- getSourceEditorContext()$path
 wd <- substring(wd, first = 1 , last = tail(unlist(gregexpr('/', wd)), n=1)-1)
@@ -880,14 +885,21 @@ abline(h=0)
 legend("topright", legend = c("model", "data", "model - data"), bty = "n", 
        lty = 1, col = c("darkgreen", "blue", "red"))
 
-
 mean(pxgb1)
 mean(h.data$discharge_vol.m3.s.[nvalid2])
 NSE(sim = as.matrix(pxgb1), obs = as.matrix(h.data$discharge_vol.m3.s.[nvalid2]))
 KGE(sim = as.matrix(pxgb1), obs = as.matrix(h.data$discharge_vol.m3.s.[nvalid2]))
 
-
 xgb.plot.deepness(mdl[[2]])
 xgb.plot.importance(xgb.importance(model=mdl[[2]]))
 xgb.plot.shap.summary(data=as.matrix(h.data[calib.h,-c(1,2)]), model=mdl)
 
+
+
+
+bayesOpt_lgb(data = as.matrix(h.data[valid2,3:27]), label = h.data[valid2,2])
+tt <- lgb.Dataset(data = as.matrix(h.data[valid2,3:27]), label = h.data[valid2,2])
+tes <- lightgbm(data = tt, params = list(objective = "regression"), nrounds = 50)
+tes2 <- lgb.cv(data = tt, params = list(objective = "regression", eval_metric = "rmse"), nrounds = 50, nfold = 5)
+
+tes2$record_evals$valid$l2$eval

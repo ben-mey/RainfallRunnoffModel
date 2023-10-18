@@ -262,7 +262,7 @@ bayesOpt_xgb <- function(data,
     xgbcv <- xgb.cv(params = param,
                     data = data,
                     label = label,
-                    nround = nrounds,
+                    nrounds = nrounds,
                     nfold = nfold,
                     prediction = TRUE,
                     early_stopping_rounds = 5,
@@ -311,7 +311,7 @@ bayesOpt_xgb <- function(data,
   xgbcv <- xgb.cv(params = opt_params,
                   data = data,
                   label = label,
-                  nround = nrounds,
+                  nrounds = nrounds,
                   nfold = nfold,
                   prediction = TRUE,
                   early_stopping_rounds = 5,
@@ -337,4 +337,108 @@ bayesOpt_xgb <- function(data,
   return(output_list)
 }
   
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bayesOpt_lgb <- function(data, 
+                         label, 
+                         max_depth = c(2L,12L), 
+                         eta = c(0.001,0.25),
+                         num_leaves = c(2L,100L),
+                         nrounds = 200,
+                         nfold = 5,
+                         iters.n = 10){
   
+  time1 <- as.numeric(Sys.time())
+  
+  obj_func <- function(eta, max_depth, num_leaves) { 
+    
+    param <- list(
+      
+      # Hyter parameters 
+      eta = eta,
+      max_depth = max_depth,
+      num_leaves = num_leaves,
+      
+      # Regression problem 
+      objective = "regression")
+    
+    lgbcv <- lgb.cv(params = param,
+                    data = data,
+                    label = label,
+                    nrounds = nrounds,
+                    nfold = nfold,
+                    early_stopping_rounds = 5,
+                    verbose = 0,
+                    nthread = detectCores())
+    
+    lst <- list(
+      
+      # First argument must be named as "Score"
+      # Function finds maxima so inverting the output
+      Score = -min(tes2$record_evals$valid$l2$eval),
+      
+      # Get number of trees for the best performing model
+      nrounds = lgbcv$best_iter
+    )
+    
+    return(lst)
+  }
+  
+  
+  
+  
+  
+  bounds <- list(eta = eta,
+                 max_depth = max_depth
+                 ,num_leaves = num_leaves
+  )
+  
+  
+  
+  
+  set.seed(1234)
+  bayes_out <- bayesOpt(FUN = obj_func, bounds = bounds, initPoints = 6, iters.n = iters.n)
+  
+  
+  # Combine best params with base params 
+  opt_params <- append(list(objective = "regression"), 
+                       getBestPars(bayes_out))
+  
+  # Run cross validation 
+  xgbcv <- lgb.cv(params = opt_params,
+                  data = data,
+                  label = label,
+                  nrounds = nrounds,
+                  nfold = nfold,
+                  early_stopping_rounds = 5,
+                  verbose = 0,)
+  
+  # Get optimal number of rounds
+  nrounds = lgbcv$best_iter
+  
+  # Fit a xgb model
+  opt_mdl <- lightgbm(data = data, label = label, 
+                     params = opt_params, 
+                     early_stopping_rounds = 5, 
+                     nrounds = nrounds, 
+                     verbose = 0)
+  
+  output_list <- list(optimized_param = data.frame(getBestPars(bayes_out),nrounds),
+                      optimized_mod = opt_mdl)
+  
+  print(paste("optimization completed in: ", as.numeric(Sys.time()-time1)%/%60, " minutes ",
+              round(as.numeric(Sys.time()-time1)%%60, digits = 1), " seconds"))
+  return(output_list)
+}  
