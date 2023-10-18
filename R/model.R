@@ -227,6 +227,7 @@ xgb_mod1 <- xgboost(data = as.matrix(h.data[calib.h,3:27]), label = h.data$disch
 pxgb1 <- predict(object = xgb_mod1, newdata = as.matrix(h.data[valid.h,3:27]))
 
 
+
 maxy <- max(pxgb1,h.data$discharge_vol.m3.s.[valid.h])*1.1
 miny <- min(pxgb1-h.data$discharge_vol.m3.s.[valid.h])*1.1
 plot(pxgb1, type = "l", col="darkgreen", ylim = c(miny,maxy), main = "main")
@@ -762,14 +763,14 @@ xgb.plot.multi.trees(test1[[1]])
 #############################################################
 
 
-X <- as.matrix(h.data[calib.h,3:27])
+X <- as.matrix(h.data[valid2,3:27])
 # Get the target variable
-y <- h.data[calib.h,2]
+y <- h.data[valid2,2]
 
 
 
 # Function must take the hyper-parameters as inputs
-obj_func <- function(eta, max_depth, min_child_weight, lambda, alpha) { #, min_child_weight, subsample, lambda, alpha
+obj_func <- function(eta, max_depth, min_child_weight, lambda, alpha, nrounds) { #, min_child_weight, subsample, lambda, alpha
   
   param <- list(
     
@@ -793,11 +794,11 @@ obj_func <- function(eta, max_depth, min_child_weight, lambda, alpha) { #, min_c
   xgbcv <- xgb.cv(params = param,
                   data = X,
                   label = y,
-                  nround = 200,
                   nfold = 5,
                   # folds = folds,
                   prediction = TRUE,
                   early_stopping_rounds = 5,
+                  nrounds = 200,
                   verbose = 0,
                   maximize = F,
                   nthread = 20)
@@ -848,10 +849,10 @@ opt_params <- append(list(booster = "gbtree",
 xgbcv <- xgb.cv(params = opt_params,
                 data = X,
                 label = y,
-                nround = 200,
                 folds = folds,
                 prediction = TRUE,
                 early_stopping_rounds = 5,
+                nrounds = 200,
                 verbose = 0,
                 maximize = F)
 
@@ -863,7 +864,6 @@ mdl <- xgboost(data = X, label = y,
                params = opt_params, 
                maximize = F, 
                early_stopping_rounds = 5, 
-               nrounds = nrounds, 
                verbose = 0)
 
 
@@ -900,6 +900,10 @@ xgb.plot.shap.summary(data=as.matrix(h.data[calib.h,-c(1,2)]), model=mdl)
 bayesOpt_lgb(data = as.matrix(h.data[valid2,3:27]), label = h.data[valid2,2])
 tt <- lgb.Dataset(data = as.matrix(h.data[valid2,3:27]), label = h.data[valid2,2])
 tes <- lightgbm(data = tt, params = list(objective = "regression"), nrounds = 50)
-tes2 <- lgb.cv(data = tt, params = list(objective = "regression", eval_metric = "rmse"), nrounds = 50, nfold = 5)
+tes2 <- lgb.cv(data = tt, params = list(objective = "regression", 
+                                        max_depth = 8,
+                                        eta = 0.15,
+                                        num_leaves = 35), 
+               nfold = 5, nrounds = 50, early_stopping_rounds = 5)
 
 tes2$record_evals$valid$l2$eval

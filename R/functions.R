@@ -38,7 +38,8 @@ optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, 
           k <- k+1
           
           xgb_mod <- xgboost(data = data, label = label, max.depth = i, eta = eta[e], 
-                             nrounds = j, nthread = nthread,objective = objective)
+                             nrounds = j, nthread = nthread,objective = objective,
+                             early_stopping_rounds = 5)
           pre_xgb <- predict(object = xgb_mod, newdata = vdata)
           
           
@@ -61,7 +62,8 @@ optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, 
     if (nrounds_opt == tail(nrounds, n=1)) {
       
       xgb_opt <- xgboost(data = data, label = label, max.depth = maxdepth_opt, eta = eta_opt, 
-                         nrounds = nrounds_opt, nthread = nthread, objective = objective)
+                         nrounds = nrounds_opt, nthread = nthread, objective = objective,
+                         early_stopping_rounds = 5)
       
       opt_result <- list(xgb_opt,rmse_opt,maxdepth_opt,nrounds_opt,eta_opt)
       
@@ -89,7 +91,8 @@ optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, 
       for (i in nrounds.2) {
         k <- k+1
         xgb_mod <- xgboost(data = data, label = label, max.depth = maxdepth_opt, eta = eta_opt, 
-                           nrounds = i, nthread = nthread,objective = objective)
+                           nrounds = i, nthread = nthread,objective = objective,
+                           early_stopping_rounds = 5)
         pre_xgb <- predict(object = xgb_mod, newdata = vdata)
         
         
@@ -140,7 +143,8 @@ optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, 
             # bt_sample <- as.logical(rbinom(n = nrow(data), size = 1, prob = bt[2]))
             xgb_mod <- xgboost(data = as.matrix(data[bt_sample[,b],]), label = label[bt_sample[,b]], 
                                max.depth = i, eta = eta[e], 
-                               nrounds = j, nthread = nthread, objective = objective)
+                               nrounds = j, nthread = nthread, objective = objective,
+                               early_stopping_rounds = 5)
             pre_xgb <- predict(object = xgb_mod, newdata = as.matrix(data[!bt_sample[,b],]))
             
             
@@ -161,7 +165,8 @@ optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, 
     if (nrounds_opt == tail(nrounds, n=1)) {
       
       xgb_opt <- xgboost(data = data, label = label, max.depth = maxdepth_opt, eta = eta_opt, 
-                         nrounds = nrounds_opt, nthread = nthread, objective = objective)
+                         nrounds = nrounds_opt, nthread = nthread, objective = objective, 
+                         early_stopping_rounds = 5)
       
       opt_result <- list(xgb_opt,rmse_opt,maxdepth_opt,nrounds_opt,eta_opt,debu)
       
@@ -192,8 +197,8 @@ optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, 
           # bt_sample <- as.logical(rbinom(n = nrow(data), size = 1, prob = bt[2]))
           
           xgb_mod <- xgboost(data = as.matrix(data[bt_sample[,b],]), label = label[bt_sample[,b]], 
-                             max.depth = s_maxdepth,
-                             eta = s_eta, nrounds = i, nthread = nthread,objective = objective)
+                             max.depth = s_maxdepth, eta = s_eta, nrounds = i, 
+                             nthread = nthread,objective = objective, early_stopping_rounds = 5)
           pre_xgb <- predict(object = xgb_mod, newdata = as.matrix(data[!bt_sample[,b]]))
           
           
@@ -366,22 +371,22 @@ bayesOpt_lgb <- function(data,
     
     param <- list(
       
-      # Hyter parameters 
+      # Hyper parameters 
       eta = eta,
       max_depth = max_depth,
       num_leaves = num_leaves,
       
       # Regression problem 
-      objective = "regression")
+      objective = "regression",
+      nthread = detectCores())
     
     lgbcv <- lgb.cv(params = param,
                     data = data,
                     label = label,
-                    nrounds = nrounds,
                     nfold = nfold,
                     early_stopping_rounds = 5,
-                    verbose = 0,
-                    nthread = detectCores())
+                    nrounds = nrounds,
+                    verbose = 0)
     
     lst <- list(
       
@@ -422,6 +427,7 @@ bayesOpt_lgb <- function(data,
                   label = label,
                   nrounds = nrounds,
                   nfold = nfold,
+                  nrounds = nrounds,
                   early_stopping_rounds = 5,
                   verbose = 0,)
   
