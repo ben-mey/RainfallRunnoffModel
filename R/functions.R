@@ -1,21 +1,36 @@
 
+##########################################
+# Data preparation for LSTM models
+##########################################
 
-
-dataPrepLSTM <- function(data, lag=7){
-  dimen <- c(dim(data)[1]+1-lag, lag, dim(data)[2])
-  outputPrep <- array(dim=dimen,data = NA)
-  for (i in 1:lag) {
-    outputPrep[,i,] <- as.matrix(data[(lag+1-i):(dim(data)[1]+1-i),])
+dataPrepLSTM <- function(x, y, timesteps=7){
+  yPrep <- matrix(nrow = as.vector(length(y)), ncol = timesteps, data = NA)
+  for(i in 1:timesteps){
+    
+    yPrep[,i] <- shift(x=y, n=i-1, type = "lag")
   }
-  return(outputPrep)
+  yPrep <- yPrep[-(1:i-1),]
+  
+  dimen <- c(dim(x)[1]+1-timesteps, timesteps, dim(x)[2])
+  xPrep <- array(dim=dimen,data = NA)
+  for (i in 1:timesteps) {
+    xPrep[,i,] <- as.matrix(x[(timesteps+1-i):(dim(x)[1]+1-i),])
+  }
+  return(list(x=xPrep, y=yPrep))
 }
 
+########################################
+# RMSE function
+########################################
 
 rmse <- function(x,y){
   rmse <- sqrt(mean((x-y)^2))
   return(rmse)
 }
 
+#######################################
+# Grid search optimization for XGBoost
+#######################################
 
 optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, eta = seq(0.025,0.2,0.025), 
                          nrounds = c(20,40,70,100,130,160,200), nthread = detectCores()-1, 
@@ -111,112 +126,7 @@ optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, 
   }
   
   if(bt[1]>0){
-    if(!(bt[1]<1|bt[2]<=0|bt[2]>=1)){simpleError("bt not in format c(nrounds (x>0),proportion of used data (0<x>1))")}
-    
-    k <- 0
-    start <- c(1,1)
-    numNA <- length(max.depth)*length(nrounds)*length(eta)
-    b_rmse <- matrix(NA, nrow = numNA, ncol = bt[1])
-    bt_sample <- matrix(TRUE, nrow = nrow(data), ncol = bt[1])
-    start.stop <- c(1,1)
-    for (i in 1:bt[1]) {
-      start.stop[1] <- runif(n=1, min=1, max=floor(nrow(data)*bt[2]))
-      start.stop[2] <- start.stop[1]+floor(nrow(data)*(1-bt[2]))
-      bt_sample[start.stop[1]:start.stop[2],i] <- FALSE
-    }
-    
-    s_maxdepth <- rep(NA, numNA)
-    s_nrounds <- rep(NA, numNA)
-    s_eta <- rep(NA, numNA)
-    
-    
-    for (i in max.depth) {
-      for (j in nrounds) {
-        for (e in 1:length(eta)) {
-          
-          k <- k+1
-          s_maxdepth[k] <- i
-          s_nrounds[k] <- j
-          s_eta[k] <- eta[e]
-          
-          for (b in 1:bt[1]) {
-            # bt_sample <- as.logical(rbinom(n = nrow(data), size = 1, prob = bt[2]))
-            xgb_mod <- xgboost(data = as.matrix(data[bt_sample[,b],]), label = label[bt_sample[,b]], 
-                               max.depth = i, eta = eta[e], 
-                               nrounds = j, nthread = nthread, objective = objective,
-                               early_stopping_rounds = 5)
-            pre_xgb <- predict(object = xgb_mod, newdata = as.matrix(data[!bt_sample[,b],]))
-            
-            
-            b_rmse[k,b] <- sqrt(mean((pre_xgb-data[!bt_sample[,b]])^2))
-          }
-          
-        }
-      }
-    }
-    
-    s_rmse <- apply(b_rmse, MARGIN = 1, FUN = mean)
-    best <- match(min(s_rmse, na.rm = TRUE),s_rmse)
-    rmse_opt <- b_rmse[best,]
-    maxdepth_opt <- s_maxdepth[best]
-    nrounds_opt <- s_nrounds[best]
-    eta_opt <- s_eta[best]
-    debu <- b_rmse
-    if (nrounds_opt == tail(nrounds, n=1)) {
-      
-      xgb_opt <- xgboost(data = data, label = label, max.depth = maxdepth_opt, eta = eta_opt, 
-                         nrounds = nrounds_opt, nthread = nthread, objective = objective, 
-                         early_stopping_rounds = 5)
-      
-      opt_result <- list(xgb_opt,rmse_opt,maxdepth_opt,nrounds_opt,eta_opt,debu)
-      
-    }
-    
-    else{
-      
-      if (nrounds_opt == nrounds[1]) {
-        
-        nrounds.2 <- 1:nrounds[2]
-        
-      }
-      
-      else{
-        
-        nrounds.2 <- seq(from=nrounds[match(nrounds_opt, nrounds)-1],
-                         to=nrounds[match(nrounds_opt, nrounds)+1],
-                         by=2)
-        
-      }
-      
-      k <- 0
-      b_rmse <- matrix(NA,length(nrounds.2),bt[1])
-      
-      for (i in nrounds.2) {
-        k <- k+1
-        for (b in 1:bt[1]) {
-          # bt_sample <- as.logical(rbinom(n = nrow(data), size = 1, prob = bt[2]))
-          
-          xgb_mod <- xgboost(data = as.matrix(data[bt_sample[,b],]), label = label[bt_sample[,b]], 
-                             max.depth = s_maxdepth, eta = s_eta, nrounds = i, 
-                             nthread = nthread,objective = objective, early_stopping_rounds = 5)
-          pre_xgb <- predict(object = xgb_mod, newdata = as.matrix(data[!bt_sample[,b]]))
-          
-          
-          b_rmse[k,b] <- sqrt(mean((pre_xgb-data[!bt_sample[,b],])^2))
-        }
-      }
-      
-      s_rmse <- apply(b_rmse, MARGIN = 1, FUN = mean)
-      rmse_opt <-  b_rmse[match(min(s_rmse, na.rm = TRUE),s_rmse),]
-      nrounds_opt <- nrounds.2[match(min(s_rmse, na.rm = TRUE),s_rmse)]
-      xgb_opt <- xgboost(data = data, label = label, max.depth = maxdepth_opt, eta = eta_opt, 
-                         nrounds = nrounds_opt, nthread = nthread, objective = objective)
-      
-      opt_result <- list(xgb_opt,rmse_opt,maxdepth_opt,nrounds_opt,eta_opt,debu)
-      print(best)
-      
-    }
-    
+    print("Currently not implemented")
   }
   print(paste("optimization completed in: ", as.numeric(Sys.time()-time1)%/%60, " minutes ",
               round(as.numeric(Sys.time()-time1)%%60, digits = 1), " seconds"))
@@ -227,9 +137,9 @@ optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, 
 
 
 
-
-
-
+################################################
+# Bayesian optimization for XGBoost
+################################################
 
 bayesOpt_xgb <- function(data, 
                          label, 
@@ -351,9 +261,9 @@ bayesOpt_xgb <- function(data,
 
 
 
-
-
-
+#############################################
+# Bayesian optimization for lightGBM
+#############################################
 
 
 bayesOpt_lgb <- function(data, 
@@ -448,3 +358,156 @@ bayesOpt_lgb <- function(data,
               round(as.numeric(Sys.time()-time1)%%60, digits = 1), " seconds"))
   return(output_list)
 }  
+
+
+
+########################################
+# Function to create custom LSTM models
+########################################
+
+create_LSTM <- function(layers, units, dropout,
+                         timesteps = NULL,
+                         n_features = NULL){
+  
+  
+  input <- layer_input(shape = c(timesteps, n_features))
+  for(lay in 1:layers){
+    # return sequances on for all except for last layer
+    if(lay < layers) {
+      return_sequences_flag <- TRUE
+    } else {
+      return_sequences_flag <- FALSE
+    }
+    # add lstm layer
+    if(lay == 1) {
+      output <- input %>% layer_lstm(units = units,
+                                    return_sequences = return_sequences_flag,
+                                    dropout = dropout)
+    } else {
+      output <- output %>% layer_lstm(units = units,
+                                     return_sequences = return_sequences_flag,
+                                     dropout = dropout)
+    }
+  }
+  output <- output %>% layer_dense(1)
+  model <- keras_model(input, output) %>%
+    keras::compile(loss = "mse",
+                   optimizer = "adam")  
+  return(model)
+}
+
+
+
+#############################################
+# Bayesian optimization for LSTM
+#############################################
+
+
+bayesOpt_LSTM <- function(x, 
+                         y, 
+                         layers = c(1L,5L), 
+                         units = c(5L,300L),
+                         dropout = c(0,0.4),
+                         batchsize = c(5L,100L),
+                         timesteps = c(5L,200L),
+                         epochs_opt = 10,
+                         epochs_lstm = 100,
+                         earlystop = 10,
+                         validation_split = 0.25){
+  
+  time1 <- as.numeric(Sys.time())
+  
+  obj_func <- function(layers, units, dropout, batchsize, timesteps) { 
+    
+   train.data <- dataPrepLSTM(x = x, y = y, timesteps = timesteps)
+      
+    
+    mod.lstm <- create_LSTM(layers = layers, 
+                            units = units,
+                            dropout = dropout,
+                            timesteps = timesteps,
+                            n_features = dim(train.data$x)[3])
+    
+    history_lstm <- fit(object = lstm_mod, 
+                        x=train.data$x, 
+                        y=train.data$y,
+                        epochs = epochs_lstm, 
+                        verbose = 0, 
+                        shuffle = FALSE, 
+                        batch_size = batchsize,
+                        validation_split = validation_split, 
+                        callbacks = list(
+                          callback_early_stopping(patience = earlystop, restore_best_weights = TRUE, 
+                                                  mode = "min", monitor = "val_loss"))
+                        )
+    
+    lst <- list(
+      
+      # First argument must be named as "Score"
+      # Function finds maxima so inverting the output
+      Score = -min(history_lstm$metrics$val_loss))
+    
+    return(lst)
+  }
+  
+  
+  
+  
+  
+  bounds <- list(layers = layers, 
+                 units = units, 
+                 dropout = dropout, 
+                 batchsize = batchsize, 
+                 timesteps = timesteps)
+  
+  
+  
+  
+  set.seed(1234)
+  bayes_out <- bayesOpt(FUN = obj_func, bounds = bounds, initPoints = 12, iters.n = epochs_opt)
+  
+  
+  # Get optimized parameters
+  opt_params <- getBestPars(bayes_out)
+  
+  
+  # create optimized data set
+  
+  opt_data <- dataPrepLSTM(x = x,
+                           y = y,
+                           timesteps = opt_params$timesteps)
+  
+  
+  # create a optimized lstm model
+  
+  opt_mdl <- create_LSTM(layers = opt_params$layers, 
+                         units = opt_params$units,
+                         dropout = opt_params$dropout,
+                         timesteps = opt_params$timesteps,
+                         n_features = dim(opt_data$x)[3])
+  
+  
+  # Fit a lstm model
+  opt_history_lstm <- fit(object = opt_mdl, 
+                          x=opt_data$x, 
+                          y=opt_data$y,
+                          epochs = epochs_lstm, 
+                          verbose = 0, 
+                          shuffle = FALSE, 
+                          batch_size = opt_params$batchsize,
+                          validation_split = validation_split, 
+                          callbacks = list(
+                            callback_early_stopping(patience = earlystop, restore_best_weights = TRUE, 
+                                                    mode = "min", monitor = "val_loss")))
+  
+  output_list <- list(optimized_param = data.frame(getBestPars(bayes_out)),
+                      optimized_history = opt_history_lstm,
+                      optimized_mod = opt_mdl)
+  
+  print(paste("optimization completed in: ", as.numeric(Sys.time()-time1)%/%60, " minutes ",
+              round(as.numeric(Sys.time()-time1)%%60, digits = 1), " seconds"))
+  return(output_list)
+}
+
+
+

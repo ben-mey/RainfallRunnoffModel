@@ -258,8 +258,8 @@ h.mean <- lapply(h.data[,c(-1)], FUN = "mean",2, na.rm = TRUE)
 h.sd <- lapply(h.data[,c(-1)], FUN = "sd",2)
 h.data.scale <- scale(h.data[,c(-1)], center = TRUE)
 
-h.data.lstm <- dataPrepLSTM(data = h.data.scale[calib.h,], lag = 10)
-h.data.lstm_val <- dataPrepLSTM(data = h.data.scale[valid.h,], lag = 10)
+h.data.lstm <- dataPrepLSTM(x = h.data.scale[valid2,-1], y = h.data.scale[valid2,1], timesteps = 10)
+h.data.lstm_val <- dataPrepLSTM(x = h.data.scale[nvalid2,-1], y = h.data.scale[nvalid2,1], timesteps = 10)
 
 lstm_mod <- keras_model_sequential()
 lstm_mod <- layer_lstm(object = lstm_mod, units = 10, return_sequences = TRUE) %>% #, return_sequences = TRUE
@@ -268,12 +268,16 @@ layer_lstm(units = 20, return_sequences = TRUE) %>%
 layer_lstm(units = 20) %>%
   layer_dense(units = 1)
 compile(lstm_mod, optimizer = "adam", loss = "mse", metrics = "mse") # optimizer = "adam" / "rmsprop"
+test <- dataPrepLSTM(data = h.data.scale[valid2,1])
 
+lstm_mod <- create_LSTM(layers = 3, units = 10, timesteps = 10, n_features = 25, dropout = 0)
 
-
-history_lstm <- fit(object = lstm_mod, x=h.data.lstm[,,-1], y=h.data.lstm[,1,1],
+history_lstm <- fit(object = lstm_mod, x=h.data.lstm[,,-1], y=h.data.lstm[,,1],
                     epochs = 40, verbose = 1, shuffle = FALSE, batch_size = 5,
-                    validation_split = 0.25)
+                    validation_split = 0.25,callbacks = list(
+                      callback_early_stopping(patience = 10, restore_best_weights = TRUE, 
+                                              mode = "min", monitor = "val_loss")
+                    ))
 ### 2044
 # 5-47-1.1422
 # 10-26-0.1445
@@ -300,17 +304,18 @@ history_lstm <- fit(object = lstm_mod, x=h.data.lstm[,,-1], y=h.data.lstm[,1,1],
 # 5:20:5-20-0.16
 # 5:10:5-28.0.18
 
+
 pre_lstm <- predict(object = lstm_mod, x = h.data.lstm_val[,,-1])
 
 me <- mean(h.data$discharge_vol.m3.s.)
 std <- sd(h.data$discharge_vol.m3.s.)
-rmse(h.data$discharge_vol.m3.s.[9142:14610],pre_lstm*std+me) # 2040 *50.3518+46.78827  2020 *60.357+65.206 [9142:14610]
+rmse(h.data$discharge_vol.m3.s.[nvalid2],pre_lstm*std+me) # 2040 *50.3518+46.78827  2020 *60.357+65.206 [9142:14610]
 
-maxy <- max(pre_lstm*std+me,h.data$discharge_vol.m3.s.[9142:14610])
-miny <- min(pre_lstm*std+me-h.data$discharge_vol.m3.s.[9142:14610])
-plot(h.data$discharge_vol.m3.s.[9142:14610], type = "l", col = "blue", ylim = c(miny*1.1,maxy*1.1))
+maxy <- max(pre_lstm*std+me,h.data$discharge_vol.m3.s.[nvalid2])
+miny <- min(pre_lstm*std+me-h.data$discharge_vol.m3.s.[nvalid2])
+plot(h.data$discharge_vol.m3.s.[nvalid2], type = "l", col = "blue", ylim = c(miny*1.1,maxy*1.1))
 lines(pre_lstm*std+me, col = "green")
-lines(pre_lstm*std+me-h.data$discharge_vol.m3.s.[9142:14610], col = "red")
+lines(pre_lstm*std+me-h.data$discharge_vol.m3.s.[nvalid2], col = "red")
 abline(h=0)
 
 mean(pre_lstm*std+me)
@@ -893,6 +898,31 @@ KGE(sim = as.matrix(pxgb1), obs = as.matrix(h.data$discharge_vol.m3.s.[nvalid2])
 xgb.plot.deepness(mdl[[2]])
 xgb.plot.importance(xgb.importance(model=mdl[[2]]))
 xgb.plot.shap.summary(data=as.matrix(h.data[calib.h,-c(1,2)]), model=mdl)
+
+
+
+
+
+h.mean <- lapply(h.data[,c(-1)], FUN = "mean",2, na.rm = TRUE)
+h.sd <- lapply(h.data[,c(-1)], FUN = "sd",2)
+h.data.scale <- scale(h.data[,c(-1)], center = TRUE)
+
+
+h.data.lstm_val <- dataPrepLSTM(x = h.data.scale[nvalid2,-1], 
+                                y = h.data.scale[nvalid2,1], 
+                                timesteps = 10,
+                                epochs_opt = 12)
+
+lstm_mod <- bayesOpt_LSTM(x = h.data.scale[valid2,-1], y = h.data.scale[valid2,1])
+
+
+
+
+
+
+
+
+
 
 
 
