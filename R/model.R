@@ -913,7 +913,7 @@ h.data.lstm_val <- dataPrepLSTM(x = h.data.scale[nvalid2,-1],
                                 timesteps = 10,
                                 epochs_opt = 12)
 
-lstm_mod <- bayesOpt_LSTM(x = h.data.scale[valid2,-1], y = h.data.scale[valid2,1])
+lstm_mod <- bayesOpt_LSTM(x = h.data.scale[valid2,-1], y = h.data.scale[valid2,1], epochs_opt = 12)
 
 
 

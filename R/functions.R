@@ -428,7 +428,7 @@ bayesOpt_LSTM <- function(x,
                             timesteps = timesteps,
                             n_features = dim(train.data$x)[3])
     
-    history_lstm <- fit(object = lstm_mod, 
+    history_lstm <- fit(object = mod.lstm, 
                         x=train.data$x, 
                         y=train.data$y,
                         epochs = epochs_lstm, 
