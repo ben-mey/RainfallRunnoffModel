@@ -1,10 +1,119 @@
+##########################################
+##########################################
+
+# Custom functions used for data preparation and model optimization
+# to keep the main script clean and understandable
+
+
+
+
+
+##########################################
+# General data preparation
+##########################################
+
+# creates various derived variables for modeling, indices for calibration / validation and
+# shortens them to remove the rows containing NA (take care your data initially contains no NA)
+
+
+# @ data:       data frame or matrix containing date, discharge, precipitation, air temperature
+# @ dateformat: string containing the format of the col date (ex.: "%Y-%m-%d")
+# @ colnames:   vector containing all 4 exact strings: "date", "discharge", "precip", "temp"; arrange them matching your input data
+# @ start:      start year of the index vector generated for calibration validation
+# @ end:        end year of the index vector generated for calibration validation
+
+dataPrep <- function(data,
+                     dateformat = "%Y-%m-%d", 
+                     colname = c("date", "discharge", "precip", "temp"),
+                     start = 1981,
+                     end = 2020) {
+  
+  colnames(data) <- c("date", "discharge", "precip", "temp")
+ 
+  data$lag1precip <- shift(x=data$precip,n=1, type= "lag")
+  data$lag2precip <- shift(x=data$precip,n=2, type= "lag")
+  data$lag3precip <- shift(x=data$precip,n=3, type= "lag")
+  data$lag4precip <- shift(x=data$precip,n=4, type= "lag")
+  data$lag5precip <- shift(x=data$precip,n=5, type= "lag")
+  data$lag6precip <- shift(x=data$precip,n=6, type= "lag")
+  data$lag7precip <- shift(x=data$precip,n=7, type= "lag")
+  
+  data$lag1temp <- shift(x=data$temp,n=1, type= "lag")
+  data$lag2temp <- shift(x=data$temp,n=2, type= "lag")
+  data$lag3temp <- shift(x=data$temp,n=3, type= "lag")
+  data$lag4temp <- shift(x=data$temp,n=4, type= "lag")
+  data$lag5temp <- shift(x=data$temp,n=5, type= "lag")
+  data$lag6temp <- shift(x=data$temp,n=6, type= "lag")
+  data$lag7temp <- shift(x=data$temp,n=7, type= "lag")
+  
+  data$sum2precip <- frollsum(x=data$precip, n= 2)
+  data$sum3precip <- frollsum(x=data$precip, n= 3)
+  data$sum4precip <- frollsum(x=data$precip, n= 4)
+  data$sum5precip <- frollsum(x=data$precip, n= 5)
+  data$sum6precip <- frollsum(x=data$precip, n= 6)
+  data$sum7precip <- frollsum(x=data$precip, n= 7)
+  data$sum15precip <- frollsum(x=data$precip, n= 15)
+  data$sum30precip <- frollsum(x=data$precip, n= 30)
+  
+  data$mean3temp <- frollmean(x=data$temp, n=3, align = "right")
+  data$mean7temp <- frollmean(x=data$temp, n=7, align = "right")
+  data$mean30temp <- frollmean(x=data$temp, n=30, align = "right")
+  data$mean60temp <- frollmean(x=data$temp, n=60, align = "right")
+  data$mean30templag30 <- shift(x=data$mean30temp ,n=30, type= "lag")
+  data$sum30precilag30 <- shift(x=data$sum30preci ,n=30, type= "lag")
+  
+  lh.filter <- as.data.frame(data$discharge)
+  lh.filter$lowpass15 <- frollmean(x=data$discharge, n=15, align = "center")
+  lh.filter$lowpass31 <- frollmean(x=data$discharge, n=31, align = "center")
+  lh.filter$lowpass45 <- frollmean(x=data$discharge, n=45, align = "center")
+  lh.filter$lowpass61 <- frollmean(x=data$discharge, n=61, align = "center")
+  lh.filter$lowpass121 <- frollmean(x=data$discharge, n=121, align = "center")
+  lh.filter$highpass15 <- data$discharge-lh.filter$lowpass15
+  lh.filter$highpass31 <- data$discharge-lh.filter$lowpass31
+  lh.filter$highpass45 <- data$discharge-lh.filter$lowpass45
+  lh.filter$highpass61 <- data$discharge-lh.filter$lowpass61
+  lh.filter$highpass121 <- data$discharge-lh.filter$lowpass121
+  
+  data <- data[!is.na(lh.filter$lowpass121),]
+  lh.filter <- lh.filter[!is.na(lh.filter$lowpass121),]
+  
+  dat <- strptime(data$date, format = dateformat)
+  dat.y <- year(dat)
+ 
+  skp <- 1
+  count <- 0
+  skipunreg <- NA
+  for (i in start:end) {
+    count <- count + 1
+    if (skp!=3) {skipunreg[count]<-i; skp <- skp + 1}
+    else {skp <- 1}
+  }
+  
+  skipunreg <- skipunreg[!is.na(skipunreg)]
+  calib2 <- dat.y%in%skipunreg
+  valid2 <- !calib2
+  
+  output <- list(data = data[,-1], 
+                 date = dat, 
+                 calib = calib2, 
+                 valid = valid2, 
+                 lh.filter = lh.filter)
+  
+  return(output)
+}
+
+
 
 ##########################################
 # Data preparation for LSTM models
 ##########################################
 
-# @ x:          data frame or matrix with predictor variables used in the LSTM
-# @ y:          vector with the target variable used in the LSTM
+# creates the 3D array for predictor variables and 2D matrix for discharge data used for LSTM models.
+# Used inside the bayes_opt_lstm function. Needed as stand alone if you intend to to custom LSTM models.
+
+
+# @ x:          data frame or matrix with predictor variables used in the LSTM. Data should be standard normalized.
+# @ y:          vector with the target variable used in the LSTM. Data should be standard normalized.
 # @ timesteps:  number of time steps used in the LSTM
 # @ weights:    vector with the same length as y containing weights used in the LSTM
 
@@ -46,6 +155,10 @@ rmse <- function(x,y){
 # Grid search optimization for XGBoost
 #######################################
 
+# basic grid search optimization for XGBoost. No inbuilt cross validation. 
+# Slower than the Bayesian optimization but maybe easyer to understand.
+
+
 # @ data:       matrix with training data of the predictor variables (x)
 # @ label:      matrix with training data of the target variable (x)
 # @ vdata:      matrix with validation data of the predictor variables (x)
@@ -53,8 +166,7 @@ rmse <- function(x,y){
 # @ max_depth:  vector giving the max depth of the trees for the grid search optimization
 # @ eta:        vector giving the the learning rates used in the grid search optimization
 # @ nrounds:    vector giving the max depth of the trees for the initial grid search optimization
-
-
+# @ bt:         deprecated, legacy arg. Keep on FLASE
 
 optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, eta = seq(0.025,0.2,0.025), 
                          nrounds = c(20,40,70,100,130,160,200), nthread = detectCores()-1, 
@@ -159,11 +271,14 @@ optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, 
 
 
 
-
-
 ################################################
 # Bayesian optimization for XGBoost
 ################################################
+
+# Implementation of Bayesian hyper parameter optimization with cross validation for XGBoost.
+# Fast and efficient: on my machine a run with default parameters takes 7 to 8 minutes (i7 12700k).
+# Returns a list with the optimized hyper parameter, the optimized model, and a summary of the Bayesian optimization.
+
 
 # @ data:       matrix of predictor variables (x) used for training and cross validation
 # @ label:      vector with target variable (y) used for training and cross validation
@@ -177,7 +292,7 @@ optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, 
 # @ initPoints: number of initial points calculated for Bayesian optimization
 
 
-bayesOpt_xgb <- function(data, 
+bayes_opt_xgb <- function(data, 
                          label, 
                          max_depth = c(2L,12L), 
                          eta = c(0.001,0.25),
@@ -236,17 +351,12 @@ bayesOpt_xgb <- function(data,
   }
   
   
-  
-  
-  
   bounds <- list(eta = eta,
                  max_depth = max_depth
                  ,min_child_weight = min_child_weight
                  ,lambda = lambda
                  ,alpha = alpha
   )
-  
-  
   
   
   set.seed(1234)
@@ -292,16 +402,15 @@ bayesOpt_xgb <- function(data,
   
 
 
-
-
-
-
-
-
-
 #############################################
 # Bayesian optimization for lightGBM
 #############################################
+
+# Implementation of Bayesian hyper parameter optimization with cross validation for LightGBM.
+# Fast and efficient: on my machine a run with default parameters takes 3 to 4 minutes.
+# Returns a list with the optimized hyper parameter, the optimized model, and a summary of the Bayesian optimization.
+
+
 # @ data:       matrix of predictor variables (x)
 # @ label:      vector with target variable (y)
 # @ max_depth:  vector giving the lower and upper bounds (integers) of optimization of max depth of the trees
@@ -312,7 +421,7 @@ bayesOpt_xgb <- function(data,
 # @ epochs_opt: number of optimization epochs during Bayesian optimization
 # @ initPoints: number of initial points calculated for Bayesian optimization
 
-bayesOpt_lgb <- function(data, 
+bayes_opt_lgb <- function(data, 
                          label, 
                          max_depth = c(2L,12L), 
                          eta = c(0.001,0.25),
@@ -359,15 +468,10 @@ bayesOpt_lgb <- function(data,
   }
   
   
-  
-  
-  
   bounds <- list(eta = eta,
                  max_depth = max_depth
                  ,num_leaves = num_leaves
   )
-  
-  
   
   
   set.seed(1234)
@@ -412,20 +516,30 @@ bayesOpt_lgb <- function(data,
 # Function to create custom LSTM models
 ########################################
 
+# This function is mainly used in the Bayesian optimization for LSTM models
+#  but can also be used to create LSTM models outside of this.
+
+
+# @ layers:     number of layers of the LSTM
+# @ units:      number of units per layer
+# @ dropout:    dropout rate
+# @ timesteps:  time step size of the input data
+# @ n_features: number of features used (x variables)
+
 create_LSTM <- function(layers, units, dropout,
-                         timesteps = NULL,
-                         n_features = NULL){
+                         timesteps,
+                         n_features){
   
   
   input <- layer_input(shape = c(timesteps, n_features))
   for(lay in 1:layers){
-    # return sequances on for all except for last layer
+    # return sequences on for all except for last layer
     if(lay < layers) {
       return_sequences_flag <- TRUE
     } else {
       return_sequences_flag <- FALSE
     }
-    # add lstm layer
+    # add a lstm layer
     if(lay == 1) {
       output <- input %>% layer_lstm(units = units,
                                     return_sequences = return_sequences_flag,
@@ -449,8 +563,26 @@ create_LSTM <- function(layers, units, dropout,
 # Bayesian optimization for LSTM
 #############################################
 
+# Implementation of Bayesian hyper parameter optimization for LSTM.
+# Take care: optimization can take quite long. On my machine (GTX 3070) a run with default parameters takes
+# between 1 and 3 hours (depends on how complex the optimal model is).
+# Returns a list with the optimized hyper parameter, the optimized model, and a summary of the Bayesian optimization.
 
-bayesOpt_LSTM <- function(x, 
+
+# @ x:      predictor variables in a 2D format. Input data should be standard normalized. Creates the needed 3D format inside.
+# @ y:      target variable in a 1D format. Input data should be standard normalized. Creates the needed 2D format inside.
+# @
+# @
+# @
+# @
+# @
+# @
+# @
+# @
+# @
+# @
+
+bayes_opt_LSTM <- function(x, 
                          y, 
                          layers = c(1L,5L), 
                          units = c(5L,150L),
@@ -499,16 +631,11 @@ bayesOpt_LSTM <- function(x,
   }
   
   
-  
-  
-  
-  bounds <- list(layers = layers, 
+    bounds <- list(layers = layers, 
                  units = units, 
                  dropout = dropout, 
                  batchsize = batchsize, 
                  timesteps = timesteps)
-  
-  
   
   
   set.seed(1234)
@@ -557,6 +684,64 @@ bayesOpt_LSTM <- function(x,
               round(as.numeric(Sys.time()-time1)%%60, digits = 1), " seconds"))
   return(output_list)
 }
+
+
+
+#############################################
+# calculate monthly means of measured and modeled data
+#############################################
+
+# 
+# 
+
+
+# @ x:      predictor variables in a 2D format. Input data should be standard normalized. Creates the needed 3D format inside.
+# @ y:      target variable in a 1D format. Input data should be standard normalized. Creates the needed 2D format inside.
+# @
+
+monthly_mean <- function(measured, modeled, date){
+  year <- year(date)
+  month <- month(date)
+  pre.out <- data.frame(year = as.factor(year), 
+                        month = as.factor(month), 
+                        measured= measured, 
+                        modeled = modeled)
+  output.l <- aggregate(x = cbind(measured, modeled)~year+month, 
+                      data = pre.out,
+                      FUN = "mean")
+  output.w <- list(measured = spread(data = output.l[,1:3], key = "month", value = "measured")[,-1],
+                   modeled = spread(data = output.l[,c(1,2,4)], key = "month", value = "modeled")[,-1])
+  colnames(output.w$measured) <- month.abb
+  colnames(output.w$modeled) <- month.abb
+  return(output.w)
+  
+}
+
+
+#############################################
+# calculate monthly means of measured and modeled data
+#############################################
+
+# 
+# 
+
+
+# @ x:      predictor variables in a 2D format. Input data should be standard normalized. Creates the needed 3D format inside.
+# @ y:      target variable in a 1D format. Input data should be standard normalized. Creates the needed 2D format inside.
+# @
+
+monthly_plot <- function(data, main="Titel"){
+  plot(colMeans(data$measured), 
+       type = "l", ylim = c(0,75), xlab = "Month", ylab = "Mean Discharge", 
+       xaxt = "n", col = "blue", main = main)
+  lines(colMeans(data$modeled), col = "green")
+  axis(side = 1, at = 1:12, labels = month.abb)
+  legend("topright", legend = c("model", "data"), bty = "n", 
+         lty = 1, col = c("green", "blue"))
+}
+
+
+
 
 
 

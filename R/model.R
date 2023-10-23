@@ -10,10 +10,6 @@ if(!'devtool'%in%installed.packages()){
   install.packages('devtool')
 }
 
-# if(!'wateRtemp'%in%installed.packages()){
-#   devtools::install_github("MoritzFeigl/wateRtemp")
-# }
-
 if(!'data.table'%in%installed.packages()){
   install.packages('data.table')
 }
@@ -26,7 +22,7 @@ if(!'DiagrammeR'%in%installed.packages()){
   install.packages('DiagrammeR')
 }
 
-if(!'hydroGOF'%in%installed.packages()){
+if(!'hydroGOF'%in%installed.packages()){ # archived because dependency hydroTSM was archived. Used here to calculate NSE and KGE
   install.packages('hydroGOF')
 }
 
@@ -48,6 +44,12 @@ if(!'lightgbm'%in%installed.packages()){
   install.packages('lightgbm')
 }
 
+if(!'lubridate'%in%installed.packages()){
+  install.packages('lubridate')
+}
+
+
+
 rm(list=ls())
 gc()
 
@@ -56,18 +58,21 @@ library(rstudioapi)
 library(xgboost)
 #library(transformer)
 #library(attention)
-library(tensorflow) #read documentation for installation https://tensorflow.rstudio.com/install/
-library(keras) #read documentation for installation
-#library(wateRtemp)
+library(tensorflow) #read documentation for installation https://tensorflow.rstudio.com/install/ For gpu support cuda is needed. look for a guide
+library(keras) #read documentation for installation. For gpu support cuda is needed. look for a guide
 library(data.table)
 library(igraph)
 library(DiagrammeR)
-library(hydroGOF) # archived because dependency hydroTSM was archived
+library(hydroGOF) # archived because dependency hydroTSM was archived. Used here to calculate NSE and KGE
 library(tseries)
 library(parallel)
 library(ParBayesianOptimization)
 library(lightgbm)
+library(lubridate)
+library(tidyr)
 
+
+# get file path and set working directory. A long as the folder structure is the same as I used, all paths should work.
 wd <- getSourceEditorContext()$path
 wd <- substring(wd, first = 1 , last = tail(unlist(gregexpr('/', wd)), n=1)-1)
 setwd(wd)
@@ -113,10 +118,10 @@ for (i in 1981:2020) {
 }
 skipunreg <- skipunreg[!is.na(skipunreg)]
 skipunreg <- dat.y%in%skipunreg
+calib2 <- rep(FALSE, length(dat.y))
+calib2[61:14549] <- skipunreg[61:14549]
 valid2 <- rep(FALSE, length(dat.y))
-valid2[61:14549] <- skipunreg[61:14549]
-nvalid2 <- rep(FALSE, length(dat.y))
-nvalid2[61:14549] <- !valid2[61:14549]
+valid2[61:14549] <- !calib2[61:14549]
 
 h.data$lag1preci <- shift(x=h.data$precipitation.mm.d.,n=1, type= "lag")
 h.data$lag2preci <- shift(x=h.data$precipitation.mm.d.,n=2, type= "lag")
@@ -134,7 +139,11 @@ h.data$lag5temp <- shift(x=h.data$temperature..C.,n=5, type= "lag")
 h.data$lag6temp <- shift(x=h.data$temperature..C.,n=6, type= "lag")
 h.data$lag7temp <- shift(x=h.data$temperature..C.,n=7, type= "lag")
 
+h.data$sum2preci <- frollsum(x=h.data$precipitation.mm.d., n= 2)
 h.data$sum3preci <- frollsum(x=h.data$precipitation.mm.d., n= 3)
+h.data$sum4preci <- frollsum(x=h.data$precipitation.mm.d., n= 4)
+h.data$sum5preci <- frollsum(x=h.data$precipitation.mm.d., n= 5)
+h.data$sum6preci <- frollsum(x=h.data$precipitation.mm.d., n= 6)
 h.data$sum7preci <- frollsum(x=h.data$precipitation.mm.d., n= 7)
 h.data$sum30preci <- frollsum(x=h.data$precipitation.mm.d., n= 30)
 
@@ -156,6 +165,9 @@ filter$highpass31 <- h.data$discharge_vol.m3.s.-filter$lowpass31
 filter$highpass45 <- h.data$discharge_vol.m3.s.-filter$lowpass45
 filter$highpass61 <- h.data$discharge_vol.m3.s.-filter$lowpass61
 filter$highpass121 <- h.data$discharge_vol.m3.s.-filter$lowpass121
+
+p.data <- dataPrep(data[,c(1,2,5,6)])
+
 acf(x=h.data$discharge_vol.m3.s.,plot = TRUE, lag.max = 365)
 
 h.weights.max <- rep(1,length(h.data$discharge_vol.m3.s.))
@@ -258,8 +270,8 @@ h.mean <- lapply(h.data[,c(-1)], FUN = "mean",2, na.rm = TRUE)
 h.sd <- lapply(h.data[,c(-1)], FUN = "sd",2)
 h.data.scale <- scale(h.data[,c(-1)], center = TRUE)
 
-h.data.lstm <- dataPrepLSTM(x = h.data.scale[valid2,-1], y = h.data.scale[valid2,1], timesteps = 10)
-h.data.lstm_val <- dataPrepLSTM(x = h.data.scale[nvalid2,-1], y = h.data.scale[nvalid2,1], timesteps = 10)
+h.data.lstm <- dataPrepLSTM(x = h.data.scale[calib2,-1], y = h.data.scale[calib2,1], timesteps = 10)
+h.data.lstm_val <- dataPrepLSTM(x = h.data.scale[valid2,-1], y = h.data.scale[valid2,1], timesteps = 10)
 
 lstm_mod <- keras_model_sequential()
 lstm_mod <- layer_lstm(object = lstm_mod, units = 10, return_sequences = TRUE) %>% #, return_sequences = TRUE
@@ -268,7 +280,7 @@ layer_lstm(units = 20, return_sequences = TRUE) %>%
 layer_lstm(units = 20) %>%
   layer_dense(units = 1)
 compile(lstm_mod, optimizer = "adam", loss = "mse", metrics = "mse") # optimizer = "adam" / "rmsprop"
-test <- dataPrepLSTM(data = h.data.scale[valid2,1])
+test <- dataPrepLSTM(data = h.data.scale[calib2,1])
 
 lstm_mod <- create_LSTM(layers = 3, units = 10, timesteps = 10, n_features = 25, dropout = 0)
 
@@ -309,13 +321,13 @@ pre_lstm <- predict(object = lstm_mod, x = h.data.lstm_val[,,-1])
 
 me <- mean(h.data$discharge_vol.m3.s.)
 std <- sd(h.data$discharge_vol.m3.s.)
-rmse(h.data$discharge_vol.m3.s.[nvalid2],pre_lstm*std+me) # 2040 *50.3518+46.78827  2020 *60.357+65.206 [9142:14610]
+rmse(h.data$discharge_vol.m3.s.[valid2],pre_lstm*std+me) # 2040 *50.3518+46.78827  2020 *60.357+65.206 [9142:14610]
 
-maxy <- max(pre_lstm*std+me,h.data$discharge_vol.m3.s.[nvalid2])
-miny <- min(pre_lstm*std+me-h.data$discharge_vol.m3.s.[nvalid2])
-plot(h.data$discharge_vol.m3.s.[nvalid2], type = "l", col = "blue", ylim = c(miny*1.1,maxy*1.1))
+maxy <- max(pre_lstm*std+me,h.data$discharge_vol.m3.s.[valid2])
+miny <- min(pre_lstm*std+me-h.data$discharge_vol.m3.s.[valid2])
+plot(h.data$discharge_vol.m3.s.[valid2], type = "l", col = "blue", ylim = c(miny*1.1,maxy*1.1))
 lines(pre_lstm*std+me, col = "green")
-lines(pre_lstm*std+me-h.data$discharge_vol.m3.s.[nvalid2], col = "red")
+lines(pre_lstm*std+me-h.data$discharge_vol.m3.s.[valid2], col = "red")
 abline(h=0)
 
 mean(pre_lstm*std+me)
@@ -340,23 +352,10 @@ rmse(h.data$discharge_vol.m3.s.[valid.h],pre_nn*std+me)
 NSE(sim = as.matrix(pre_nn*std+me), obs = as.matrix(h.data$discharge_vol.m3.s.[valid.h]))
 KGE(sim = as.matrix(pre_nn*std+me), obs = as.matrix(h.data$discharge_vol.m3.s.[valid.h]))
 
-# lstm_rmse <- NA
-# 
-# for(i in 1:20){
-#   history_lstm <- fit(object = lstm_mod, x=h.data.lstm[,,-1], y=h.data.lstm[,1,1],
-#                       epochs = i*2, verbose = 1, shuffle = FALSE, batch_size = 5,
-#                       validation_split = 0.25, initial_epoch = i*2-2)
-#   pre_lstm <- predict(object = lstm_mod, x = h.data.lstm_val[,,-1])
-#   
-#   
-#   lstm_rmse[i] <- rmse(h.data$discharge_vol.m3.s.[9142:14610],pre_lstm*50.3518+46.78827)
-# }
 
 
-
-
-
-#########
+#########################
+#########################
 
 
 
@@ -576,7 +575,7 @@ mean(h.data$discharge_vol.m3.s.[9142:14610])
 
 maxdepth <- 3:8
 nrounds <- c(5,10,20,40,60,80,100,130,150)
-# nrounds <- 150:170
+
 eta <- seq(0.025,0.2,0.025)
 k <- 0
 numNA <- length(maxdepth)*length(nrounds)*length(eta)
@@ -767,167 +766,69 @@ xgb.plot.multi.trees(test1[[1]])
 #############################################################
 #############################################################
 
+calib <- p.data$calib
+valid <- p.data$valid
 
-X <- as.matrix(h.data[valid2,3:27])
+X <- as.matrix(p.data$data[calib,-1])
 # Get the target variable
-y <- h.data[valid2,2]
-
-
-
-# Function must take the hyper-parameters as inputs
-obj_func <- function(eta, max_depth, min_child_weight, lambda, alpha, nrounds) { #, min_child_weight, subsample, lambda, alpha
-  
-  param <- list(
-    
-    # Hyter parameters 
-    eta = eta,
-    max_depth = max_depth,
-    min_child_weight = min_child_weight,
-    # subsample = subsample,
-    lambda = lambda,
-    alpha = alpha,
-    
-    # Tree model 
-    booster = "gbtree",
-    
-    # Regression problem 
-    objective = "reg:squarederror",
-    
-    # Use the Mean Absolute Percentage Error
-    eval_metric = "rmse")
-  
-  xgbcv <- xgb.cv(params = param,
-                  data = X,
-                  label = y,
-                  nfold = 5,
-                  # folds = folds,
-                  prediction = TRUE,
-                  early_stopping_rounds = 5,
-                  nrounds = 200,
-                  verbose = 0,
-                  maximize = F,
-                  nthread = 20)
-  
-  lst <- list(
-    
-    # First argument must be named as "Score"
-    # Function finds maxima so inverting the output
-    Score = -min(xgbcv$evaluation_log$test_rmse_mean),
-    
-    # Get number of trees for the best performing model
-    nrounds = xgbcv$best_iteration
-  )
-  
-  return(lst)
-}
-
-
-
-
-
-bounds <- list(eta = c(0.001, 0.25),
-               max_depth = c(2L, 12L)
-               ,min_child_weight = c(1, 50)
-               # ,subsample = c(0.1, 1)
-               ,lambda = c(1, 12)
-               ,alpha = c(1, 12)
-               )
-
-
-
-
-set.seed(1234)
-bayes_out <- bayesOpt(FUN = obj_func, bounds = bounds, initPoints = length(bounds) + 2, iters.n = 10)
-
-bayes_out$scoreSummary[,-ncol(bayes_out$scoreSummary)] #[, c(3:8, 13)]
-data.frame(getBestPars(bayes_out))
-
-
-
-# Combine best params with base params
-opt_params <- append(list(booster = "gbtree", 
-                          objective = "reg:squarederror", 
-                          eval_metric = "rmse"), 
-                     getBestPars(bayes_out))
-
-# Run cross validation 
-xgbcv <- xgb.cv(params = opt_params,
-                data = X,
-                label = y,
-                folds = folds,
-                prediction = TRUE,
-                early_stopping_rounds = 5,
-                nrounds = 200,
-                verbose = 0,
-                maximize = F)
-
-# Get optimal number of rounds
-nrounds = xgbcv$best_iteration
-
-# Fit a xgb model
-mdl <- xgboost(data = X, label = y, 
-               params = opt_params, 
-               maximize = F, 
-               early_stopping_rounds = 5, 
-               verbose = 0)
-
+y <- p.data$data[calib,1]
 
 
 source("functions.R")
-mdl <- bayesOpt_xgb(data = as.matrix(h.data[valid2,3:27]), label = h.data[valid2,2])
+xgb_mod <- bayes_opt_xgb(data = as.matrix(p.data$data[calib,-1]), label = p.data$data[calib,1])
 
-xgb_thur <- mdl
+xgb_thur <- xgb_mod
 save(lstm_thur, file = "../Results/Models/Thur_XBoost.RData")
 
-pxgb1 <- predict(object = mdl[[2]], newdata = as.matrix(h.data[nvalid2,3:27]))
+pxgb1 <- predict(object = xgb_mod[[2]], newdata = as.matrix(p.data$data[valid,-1]))
 
-maxy <- max(pxgb1,h.data$discharge_vol.m3.s.[nvalid2])*1.1
-miny <- min(pxgb1-h.data$discharge_vol.m3.s.[nvalid2])*1.1
+maxy <- max(pxgb1,p.data$data[valid,1])*1.1
+miny <- min(pxgb1-p.data$data[valid,1])*1.1
 
-rmse(h.data$discharge_vol.m3.s.[nvalid2], pxgb1)
-plot(pxgb1, type = "l", col="darkgreen", ylim = c(miny,maxy), main = "main", ylab = "Discharge")
-lines(h.data$discharge_vol.m3.s.[nvalid2], col="blue")
-lines(pxgb1-h.data$discharge_vol.m3.s.[nvalid2], col="red")
+rmse(p.data$data[valid,1], pxgb1)
+plot(p.data$data[valid,1], type = "l", col="blue", ylim = c(miny,maxy), main = "main", ylab = "Discharge")
+lines(pxgb1, col="green")
+lines(pxgb1-p.data$data[valid,1], col="red")
 abline(h=0)
 legend("topright", legend = c("model", "data", "model - data"), bty = "n", 
-       lty = 1, col = c("darkgreen", "blue", "red"))
+       lty = 1, col = c("green", "blue", "red"))
 
 mean(pxgb1)
-mean(h.data$discharge_vol.m3.s.[nvalid2])
-NSE(sim = as.matrix(pxgb1), obs = as.matrix(h.data$discharge_vol.m3.s.[nvalid2]))
-KGE(sim = as.matrix(pxgb1), obs = as.matrix(h.data$discharge_vol.m3.s.[nvalid2]))
+mean(h.data$discharge_vol.m3.s.[valid2])
+NSE(sim = as.matrix(pxgb1), obs = as.matrix(h.data$discharge_vol.m3.s.[valid2]))
+KGE(sim = as.matrix(pxgb1), obs = as.matrix(h.data$discharge_vol.m3.s.[valid2]))
 
-xgb.plot.deepness(mdl[[2]])
-xgb.plot.importance(xgb.importance(model=mdl[[2]]))
-xgb.plot.shap.summary(data=as.matrix(h.data[calib.h,-c(1,2)]), model=mdl)
-
-
+xgb.plot.deepness(xgb_mod[[2]])
+xgb.plot.importance(xgb.importance(model=xgb_mod[[2]]))
+xgb.plot.shap.summary(data=as.matrix(h.data[calib.h,-c(1,2)]), model=xgb_mod)
 
 
 
-h.mean <- lapply(h.data[,c(-1)], FUN = "mean",2, na.rm = TRUE)
-h.sd <- lapply(h.data[,c(-1)], FUN = "sd",2)
-h.data.scale <- scale(h.data[,c(-1)], center = TRUE)
+
+
+h.mean <- lapply(p.data$data, FUN = "mean",2, na.rm = TRUE)
+h.sd <- lapply(p.data$data, FUN = "sd",2)
+h.data.scale <- scale(p.data$data, center = TRUE)
 
 
 
-lstm_mod2 <- bayesOpt_LSTM(x = h.data.scale[valid2,-1], y = h.data.scale[valid2,1], epochs_opt = 20, initPoints = 35)
+lstm_mod2 <- bayes_opt_LSTM(x = h.data.scale[calib,-1], y = h.data.scale[calib,1], epochs_opt = 20, initPoints = 35)
 lstm_mod2$bayes_summary
 
 lstm_thur <- lstm_mod2
 save(lstm_thur, file = "../Results/Models/Thur_LSTM.RData")
 
-h.data.lstm_val <- dataPrepLSTM(x = h.data.scale[nvalid2,-1], 
-                                y = h.data.scale[nvalid2,1], 
+h.data.lstm_val <- dataPrepLSTM(x = h.data.scale[valid,-1], 
+                                y = h.data.scale[valid,1], 
                                 timesteps = lstm_mod2$optimized_param$timesteps)
-wushu <- h.data$discharge_vol.m3.s.[nvalid2]
+wushu <- h.data$discharge_vol.m3.s.[valid]
 wushu <- wushu[-(1:lstm_mod2$optimized_param$timesteps-1)]
 pre_lstm <- predict(object = lstm_mod2$optimized_mod, x = h.data.lstm_val$x)
 
 
 
-me <- mean(h.data$discharge_vol.m3.s.)
-std <- sd(h.data$discharge_vol.m3.s.)
+me <- mean(p.data$data$discharge)
+std <- sd(p.data$data$discharge)
 rmse(wushu,pre_lstm*std+me) # 2040 *50.3518+46.78827  2020 *60.357+65.206 [9142:14610]
 
 maxy <- max(pre_lstm*std+me,wushu)
@@ -947,31 +848,35 @@ KGE(sim = as.matrix(pre_lstm*std+me), obs = as.matrix(wushu))
 
 
 
-lgbm_mod <- bayesOpt_lgb(data = as.matrix(h.data[valid2,3:27]), label = h.data[valid2,2])
+lgbm_mod <- bayes_opt_lgb(data = as.matrix(p.data$data[calib,-1]), label = p.data$data[calib,1])
 
 lgb_thur <- lgbm_mod
 save(lstm_thur, file = "../Results/Models/Thur_LightGBM.RData")
 
-plgbm <- predict(object = lgbm_mod$optimized_mod, data = as.matrix(h.data[nvalid2,3:27]))
+plgbm <- predict(object = lgbm_mod$optimized_mod, data = as.matrix(p.data$data[valid,-1]))
 
-maxy <- max(plgbm,h.data$discharge_vol.m3.s.[nvalid2])*1.1
-miny <- min(plgbm-h.data$discharge_vol.m3.s.[nvalid2])*1.1
+maxy <- max(plgbm,p.data$data$discharge[valid])*1.1
+miny <- min(plgbm-p.data$data$discharge[valid])*1.1
 
-rmse(h.data$discharge_vol.m3.s.[nvalid2], plgbm)
-plot(plgbm, type = "l", col="darkgreen", ylim = c(miny,maxy), main = "main", ylab = "Discharge")
-lines(h.data$discharge_vol.m3.s.[nvalid2], col="blue")
-lines(plgbm-h.data$discharge_vol.m3.s.[nvalid2], col="red")
+rmse(p.data$data$discharge[valid], plgbm)
+plot(p.data$data$discharge[valid], type = "l", col="blue", ylim = c(miny,maxy), main = "main", ylab = "Discharge")
+lines(plgbm, col="green")
+lines(plgbm-p.data$data$discharge[valid], col="red")
 abline(h=0)
 legend("topright", legend = c("model", "data", "model - data"), bty = "n", 
        lty = 1, col = c("darkgreen", "blue", "red"))
 
 mean(plgbm)
-mean(h.data$discharge_vol.m3.s.[nvalid2])
-NSE(sim = as.matrix(plgbm), obs = as.matrix(h.data$discharge_vol.m3.s.[nvalid2]))
-KGE(sim = as.matrix(plgbm), obs = as.matrix(h.data$discharge_vol.m3.s.[nvalid2]))
+mean(p.data$data$discharge[valid])
+NSE(sim = as.matrix(plgbm), obs = as.matrix(p.data$data$discharge[valid]))
+KGE(sim = as.matrix(plgbm), obs = as.matrix(p.data$data$discharge[valid]))
 
 
-lgb.plot.importance(lgb.importance(model=lgbm_mod$optimized_mod))
+lgb.plot.importance(lgb.importance(model=lgbm_mod$optimized_mod),top_n = 15)
+
+test <- monthly_mean(measured = p.data$data$discharge[valid],
+                     modeled = plgbm,
+                     date = p.data$date[valid])
 
 
-
+monthly_plot(test)
