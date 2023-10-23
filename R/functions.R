@@ -3,7 +3,12 @@
 # Data preparation for LSTM models
 ##########################################
 
-dataPrepLSTM <- function(x, y, timesteps=7){
+# @ x:          data frame or matrix with predictor variables used in the LSTM
+# @ y:          vector with the target variable used in the LSTM
+# @ timesteps:  number of time steps used in the LSTM
+# @ weights:    vector with the same length as y containing weights used in the LSTM
+
+dataPrepLSTM <- function(x, y, weights = FALSE, timesteps=7){
   yPrep <- matrix(nrow = as.vector(length(y)), ncol = timesteps, data = NA)
   for(i in 1:timesteps){
     
@@ -16,7 +21,16 @@ dataPrepLSTM <- function(x, y, timesteps=7){
   for (i in 1:timesteps) {
     xPrep[,i,] <- as.matrix(x[(timesteps+1-i):(dim(x)[1]+1-i),])
   }
-  return(list(x=xPrep, y=yPrep))
+  if (weights[1]!=FALSE) {
+    weightsPrep <- matrix(nrow = as.vector(length(y)), ncol = timesteps, data = NA)
+    for(i in 1:timesteps){
+      
+      weightsPrep[,i] <- shift(x=weights, n=i-1, type = "lag")
+    }
+    weightsPrep <- weightsPrep[-(1:i-1),]
+    return(list(x=xPrep, y=yPrep, weights = weightsPrep))
+  }
+  else {return(list(x=xPrep, y=yPrep))}
 }
 
 ########################################
@@ -31,6 +45,16 @@ rmse <- function(x,y){
 #######################################
 # Grid search optimization for XGBoost
 #######################################
+
+# @ data:       matrix with training data of the predictor variables (x)
+# @ label:      matrix with training data of the target variable (x)
+# @ vdata:      matrix with validation data of the predictor variables (x)
+# @ vlabel:     matrix with validation data of the target variable (x)
+# @ max_depth:  vector giving the max depth of the trees for the grid search optimization
+# @ eta:        vector giving the the learning rates used in the grid search optimization
+# @ nrounds:    vector giving the max depth of the trees for the initial grid search optimization
+
+
 
 optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, eta = seq(0.025,0.2,0.025), 
                          nrounds = c(20,40,70,100,130,160,200), nthread = detectCores()-1, 
@@ -141,6 +165,18 @@ optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, 
 # Bayesian optimization for XGBoost
 ################################################
 
+# @ data:       matrix of predictor variables (x) used for training and cross validation
+# @ label:      vector with target variable (y) used for training and cross validation
+# @ max_depth:  vector giving the lower and upper bounds (integers) of optimization of max depth of the trees
+# @ eta:        vector giving the lower and upper bounds of optimization of the learning rate
+# @ alpha:      vector giving the lower and upper bounds of optimization of 
+# @ lambda:     vector giving the lower and upper bounds of optimization of 
+# @ nrounds:    maximum number of trees built
+# @ nfold:      number indicating how many fold the cross validation is done
+# @ epochs_opt: number of optimization epochs during Bayesian optimization
+# @ initPoints: number of initial points calculated for Bayesian optimization
+
+
 bayesOpt_xgb <- function(data, 
                          label, 
                          max_depth = c(2L,12L), 
@@ -148,9 +184,10 @@ bayesOpt_xgb <- function(data,
                          alpha = c(1,12),
                          lambda = c(1,12),
                          min_child_weight = c(1,50),
-                         nrounds = 200,
+                         nrounds = 250,
                          nfold = 5,
-                         iters.n = 10){
+                         epochs_opt = 15,
+                         initPoints= 18){
   
   time1 <- as.numeric(Sys.time())
   
@@ -213,7 +250,7 @@ bayesOpt_xgb <- function(data,
   
   
   set.seed(1234)
-  bayes_out <- bayesOpt(FUN = obj_func, bounds = bounds, initPoints = 8, iters.n = iters.n)
+  bayes_out <- bayesOpt(FUN = obj_func, bounds = bounds, initPoints = initPoints, iters.n = epochs_opt)
   
   
   # Combine best params with base params
@@ -245,7 +282,8 @@ bayesOpt_xgb <- function(data,
                  verbose = 0)
   
   output_list <- list(optimized_param = data.frame(getBestPars(bayes_out),nrounds),
-                      optimized_mod = opt_mdl)
+                      optimized_mod = opt_mdl,
+                      bayes_summary = bayes_out$scoreSummary)
 
   print(paste("optimization completed in: ", as.numeric(Sys.time()-time1)%/%60, " minutes ",
               round(as.numeric(Sys.time()-time1)%%60, digits = 1), " seconds"))
@@ -264,7 +302,15 @@ bayesOpt_xgb <- function(data,
 #############################################
 # Bayesian optimization for lightGBM
 #############################################
-
+# @ data:       matrix of predictor variables (x)
+# @ label:      vector with target variable (y)
+# @ max_depth:  vector giving the lower and upper bounds (integers) of optimization of max depth of the trees
+# @ eta:        vector giving the lower and upper bounds of optimization of the learning rate
+# @ num_leaves: vector giving the lower and upper bounds (integers) of optimization of max number of leaves per tree
+# @ nrounds:    maximum number of trees built
+# @ nfold:      number indicating how many fold the cross validation is done
+# @ epochs_opt: number of optimization epochs during Bayesian optimization
+# @ initPoints: number of initial points calculated for Bayesian optimization
 
 bayesOpt_lgb <- function(data, 
                          label, 
@@ -273,7 +319,8 @@ bayesOpt_lgb <- function(data,
                          num_leaves = c(2L,100L),
                          nrounds = 200,
                          nfold = 5,
-                         iters.n = 10){
+                         epochs_opt = 10,
+                         initPoints = 12){
   
   time1 <- as.numeric(Sys.time())
   
@@ -302,7 +349,7 @@ bayesOpt_lgb <- function(data,
       
       # First argument must be named as "Score"
       # Function finds maxima so inverting the output
-      Score = -min(tes2$record_evals$valid$l2$eval),
+      Score = -lgbcv$best_score,
       
       # Get number of trees for the best performing model
       nrounds = lgbcv$best_iter
@@ -324,7 +371,7 @@ bayesOpt_lgb <- function(data,
   
   
   set.seed(1234)
-  bayes_out <- bayesOpt(FUN = obj_func, bounds = bounds, initPoints = 6, iters.n = iters.n)
+  bayes_out <- bayesOpt(FUN = obj_func, bounds = bounds, initPoints = initPoints, iters.n = epochs_opt)
   
   
   # Combine best params with base params 
@@ -332,27 +379,27 @@ bayesOpt_lgb <- function(data,
                        getBestPars(bayes_out))
   
   # Run cross validation 
-  xgbcv <- lgb.cv(params = opt_params,
+  lgbcv <- lgb.cv(params = opt_params,
                   data = data,
                   label = label,
                   nrounds = nrounds,
                   nfold = nfold,
-                  nrounds = nrounds,
-                  early_stopping_rounds = 5,
+                  # early_stopping_rounds = 5,
                   verbose = 0,)
   
   # Get optimal number of rounds
   nrounds = lgbcv$best_iter
   
-  # Fit a xgb model
+  # Fit a lgb model
   opt_mdl <- lightgbm(data = data, label = label, 
                      params = opt_params, 
-                     early_stopping_rounds = 5, 
+                     # early_stopping_rounds = 5, 
                      nrounds = nrounds, 
                      verbose = 0)
   
   output_list <- list(optimized_param = data.frame(getBestPars(bayes_out),nrounds),
-                      optimized_mod = opt_mdl)
+                      optimized_mod = opt_mdl,
+                      bayes_summary = bayes_out$scoreSummary)
   
   print(paste("optimization completed in: ", as.numeric(Sys.time()-time1)%/%60, " minutes ",
               round(as.numeric(Sys.time()-time1)%%60, digits = 1), " seconds"))
@@ -406,14 +453,15 @@ create_LSTM <- function(layers, units, dropout,
 bayesOpt_LSTM <- function(x, 
                          y, 
                          layers = c(1L,5L), 
-                         units = c(5L,300L),
+                         units = c(5L,150L),
                          dropout = c(0,0.4),
                          batchsize = c(5L,100L),
                          timesteps = c(5L,200L),
-                         epochs_opt = 10,
+                         epochs_opt = 15,
                          epochs_lstm = 100,
-                         earlystop = 10,
-                         validation_split = 0.25){
+                         earlystop = 8,
+                         validation_split = 0.25,
+                         initPoints = 20){
   
   time1 <- as.numeric(Sys.time())
   
@@ -464,8 +512,7 @@ bayesOpt_LSTM <- function(x,
   
   
   set.seed(1234)
-  bayes_out <- bayesOpt(FUN = obj_func, bounds = bounds, initPoints = 12, iters.n = epochs_opt)
-  
+  bayes_out <- bayesOpt(FUN = obj_func, bounds = bounds, initPoints = initPoints, iters.n = epochs_opt)
   
   # Get optimized parameters
   opt_params <- getBestPars(bayes_out)
@@ -502,12 +549,15 @@ bayesOpt_LSTM <- function(x,
   
   output_list <- list(optimized_param = data.frame(getBestPars(bayes_out)),
                       optimized_history = opt_history_lstm,
-                      optimized_mod = opt_mdl)
+                      optimized_mod = opt_mdl,
+                      bayes_summary = bayes_out$scoreSummary,
+                      optimized_input_dim = dim(opt_data$x))
   
   print(paste("optimization completed in: ", as.numeric(Sys.time()-time1)%/%60, " minutes ",
               round(as.numeric(Sys.time()-time1)%%60, digits = 1), " seconds"))
   return(output_list)
 }
+
 
 
 

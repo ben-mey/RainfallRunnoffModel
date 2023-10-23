@@ -82,16 +82,16 @@ source("functions.R")
 #                      header = TRUE, sep = ";")
 
 # Thur Andelfingen
-# data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2044.txt",
-#                    header = TRUE, sep = ";")
+data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2044.txt",
+                   header = TRUE, sep = ";")
 
 # Massa Blatten bei Naters
 # data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2161.txt",
 #                    header = TRUE, sep = ";")
 
 # Weisse Lütschine Zweilütschinen
-data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2200.txt",
-                   header = TRUE, sep = ";")
+# data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2200.txt",
+#                    header = TRUE, sep = ";")
 
 # Dischmabach Davos
 # data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2327.txt",
@@ -160,8 +160,8 @@ acf(x=h.data$discharge_vol.m3.s.,plot = TRUE, lag.max = 365)
 
 h.weights.max <- rep(1,length(h.data$discharge_vol.m3.s.))
 h.weights.min <- rep(1,length(h.data$discharge_vol.m3.s.))
-h.weights.max[h.data$discharge_vol.m3.s.>quantile(x=h.data$discharge_vol.m3.s., probs = 0.9)] <- 13
-h.weights.min[h.data$discharge_vol.m3.s.>quantile(x=h.data$discharge_vol.m3.s., probs = 0.2)] <- 13
+h.weights.max[h.data$discharge_vol.m3.s.>quantile(x=h.data$discharge_vol.m3.s., probs = 0.9)] <- 3
+h.weights.min[h.data$discharge_vol.m3.s.>quantile(x=h.data$discharge_vol.m3.s., probs = 0.2)] <- 3
 
 calib.h <- 61:9132
 valid.h <- 9133:14549 #14610
@@ -876,13 +876,15 @@ mdl <- xgboost(data = X, label = y,
 source("functions.R")
 mdl <- bayesOpt_xgb(data = as.matrix(h.data[valid2,3:27]), label = h.data[valid2,2])
 
+xgb_thur <- mdl
+save(lstm_thur, file = "../Results/Models/Thur_XBoost.RData")
 
 pxgb1 <- predict(object = mdl[[2]], newdata = as.matrix(h.data[nvalid2,3:27]))
 
 maxy <- max(pxgb1,h.data$discharge_vol.m3.s.[nvalid2])*1.1
 miny <- min(pxgb1-h.data$discharge_vol.m3.s.[nvalid2])*1.1
 
-
+rmse(h.data$discharge_vol.m3.s.[nvalid2], pxgb1)
 plot(pxgb1, type = "l", col="darkgreen", ylim = c(miny,maxy), main = "main", ylab = "Discharge")
 lines(h.data$discharge_vol.m3.s.[nvalid2], col="blue")
 lines(pxgb1-h.data$discharge_vol.m3.s.[nvalid2], col="red")
@@ -908,32 +910,68 @@ h.sd <- lapply(h.data[,c(-1)], FUN = "sd",2)
 h.data.scale <- scale(h.data[,c(-1)], center = TRUE)
 
 
+
+lstm_mod2 <- bayesOpt_LSTM(x = h.data.scale[valid2,-1], y = h.data.scale[valid2,1], epochs_opt = 20, initPoints = 35)
+lstm_mod2$bayes_summary
+
+lstm_thur <- lstm_mod2
+save(lstm_thur, file = "../Results/Models/Thur_LSTM.RData")
+
 h.data.lstm_val <- dataPrepLSTM(x = h.data.scale[nvalid2,-1], 
                                 y = h.data.scale[nvalid2,1], 
-                                timesteps = 10,
-                                epochs_opt = 12)
-
-lstm_mod <- bayesOpt_LSTM(x = h.data.scale[valid2,-1], y = h.data.scale[valid2,1], epochs_opt = 12)
-
-
+                                timesteps = lstm_mod2$optimized_param$timesteps)
+wushu <- h.data$discharge_vol.m3.s.[nvalid2]
+wushu <- wushu[-(1:lstm_mod2$optimized_param$timesteps-1)]
+pre_lstm <- predict(object = lstm_mod2$optimized_mod, x = h.data.lstm_val$x)
 
 
 
+me <- mean(h.data$discharge_vol.m3.s.)
+std <- sd(h.data$discharge_vol.m3.s.)
+rmse(wushu,pre_lstm*std+me) # 2040 *50.3518+46.78827  2020 *60.357+65.206 [9142:14610]
+
+maxy <- max(pre_lstm*std+me,wushu)
+miny <- min(pre_lstm*std+me-wushu)
+plot(wushu, type = "l", col = "blue", ylim = c(miny*1.1,maxy*1.1))
+lines(pre_lstm*std+me, col = "green")
+lines(pre_lstm*std+me-wushu, col = "red")
+abline(h=0)
+
+mean(pre_lstm*std+me)
+mean(wushu)
+NSE(sim = as.matrix(pre_lstm*std+me), obs = as.matrix(wushu))
+KGE(sim = as.matrix(pre_lstm*std+me), obs = as.matrix(wushu))
 
 
 
 
 
 
+lgbm_mod <- bayesOpt_lgb(data = as.matrix(h.data[valid2,3:27]), label = h.data[valid2,2])
+
+lgb_thur <- lgbm_mod
+save(lstm_thur, file = "../Results/Models/Thur_LightGBM.RData")
+
+plgbm <- predict(object = lgbm_mod$optimized_mod, data = as.matrix(h.data[nvalid2,3:27]))
+
+maxy <- max(plgbm,h.data$discharge_vol.m3.s.[nvalid2])*1.1
+miny <- min(plgbm-h.data$discharge_vol.m3.s.[nvalid2])*1.1
+
+rmse(h.data$discharge_vol.m3.s.[nvalid2], plgbm)
+plot(plgbm, type = "l", col="darkgreen", ylim = c(miny,maxy), main = "main", ylab = "Discharge")
+lines(h.data$discharge_vol.m3.s.[nvalid2], col="blue")
+lines(plgbm-h.data$discharge_vol.m3.s.[nvalid2], col="red")
+abline(h=0)
+legend("topright", legend = c("model", "data", "model - data"), bty = "n", 
+       lty = 1, col = c("darkgreen", "blue", "red"))
+
+mean(plgbm)
+mean(h.data$discharge_vol.m3.s.[nvalid2])
+NSE(sim = as.matrix(plgbm), obs = as.matrix(h.data$discharge_vol.m3.s.[nvalid2]))
+KGE(sim = as.matrix(plgbm), obs = as.matrix(h.data$discharge_vol.m3.s.[nvalid2]))
 
 
-bayesOpt_lgb(data = as.matrix(h.data[valid2,3:27]), label = h.data[valid2,2])
-tt <- lgb.Dataset(data = as.matrix(h.data[valid2,3:27]), label = h.data[valid2,2])
-tes <- lightgbm(data = tt, params = list(objective = "regression"), nrounds = 50)
-tes2 <- lgb.cv(data = tt, params = list(objective = "regression", 
-                                        max_depth = 8,
-                                        eta = 0.15,
-                                        num_leaves = 35), 
-               nfold = 5, nrounds = 50, early_stopping_rounds = 5)
+lgb.plot.importance(lgb.importance(model=lgbm_mod$optimized_mod))
 
-tes2$record_evals$valid$l2$eval
+
+
