@@ -109,15 +109,22 @@ dataPrep <- function(data,
 ##########################################
 
 # creates the 3D array for predictor variables and 2D matrix for discharge data used for LSTM models.
-# Used inside the bayes_opt_lstm function. Needed as stand alone if you intend to to custom LSTM models.
+# Used inside the bayes_opt_lstm function. Needed as stand alone for preparation of validation input data.
 
 
 # @ x:          data frame or matrix with predictor variables used in the LSTM. Data should be standard normalized.
 # @ y:          vector with the target variable used in the LSTM. Data should be standard normalized.
 # @ timesteps:  number of time steps used in the LSTM
 # @ weights:    vector with the same length as y containing weights used in the LSTM
+# @ duplicate:  vector giving info about duplication of min or max values for training: c(mode, proportion, times) 
+#               ex.: c(max,0.9,1); c(min,0.1,1) adds the highest/lowest 10% of the values 1 time
 
-dataPrepLSTM <- function(x, y, weights = FALSE, timesteps=7){
+dataPrepLSTM <- function(x, 
+                         y, 
+                         weights = FALSE, 
+                         timesteps=7,
+                         duplicate = FALSE){
+  
   yPrep <- matrix(nrow = as.vector(length(y)), ncol = timesteps, data = NA)
   for(i in 1:timesteps){
     
@@ -138,6 +145,23 @@ dataPrepLSTM <- function(x, y, weights = FALSE, timesteps=7){
     }
     weightsPrep <- weightsPrep[-(1:i-1),]
     return(list(x=xPrep, y=yPrep, weights = weightsPrep))
+  }
+  else if (duplicate[1]!=FALSE) {
+    # create logical vector depending on proportion of max / min values
+    if(duplicate[1]=="max"){add <- yPrep[,1]>quantile(x = yPrep, probs = as.numeric(duplicate[2]))}
+    if(duplicate[1]=="min"){add <- yPrep[,1]<quantile(x = yPrep, probs = as.numeric(duplicate[2]))}
+    
+    # select the y an d x data that should be duplicated
+    addy <- yPrep[add,]
+    addx <- xPrep[add,,]
+    
+    #append the previously selected data n times to the original data.
+    for (t in 1:duplicate[3]) {
+      yPrep <- rbind(yPrep,addy)
+      xPrep <- abind::abind(xPrep,addx, along = 1)
+    }
+    return(list(x=xPrep, y=yPrep))
+    
   }
   else {return(list(x=xPrep, y=yPrep))}
 }
@@ -269,6 +293,21 @@ optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, 
   return(opt_result)
 }
 
+
+################################################
+# normalize input data for NN,LSTM, and GRU model inputs
+################################################
+
+# to normalize the input data for NN,LSTM, and GRU
+
+
+normalize <- function(x) {
+  return (apply(X = as.matrix(x), MARGIN = 2,FUN = function(x) (x - min(x)) / (max(x) - min(x))))
+}
+
+
+
+trans_back <- function(x, min, max) {x * (max - min) + min}
 
 
 ################################################
@@ -560,7 +599,7 @@ create_LSTM <- function(layers, units, dropout,
 
 
 #############################################
-# Bayesian optimization for LSTM
+# Bayesian optimization for LSTM models
 #############################################
 
 # Implementation of Bayesian hyper parameter optimization for LSTM.
@@ -581,6 +620,8 @@ create_LSTM <- function(layers, units, dropout,
 # @
 # @
 # @
+# @ duplicate:  vector giving info about duplication of min or max values for training: c(mode, proportion, times) 
+#               ex.: c(max,0.9,1); c(min,0.1,1) adds the highest/lowest 10% of the values 1 time
 
 bayes_opt_LSTM <- function(x, 
                          y, 
@@ -588,18 +629,19 @@ bayes_opt_LSTM <- function(x,
                          units = c(5L,150L),
                          dropout = c(0,0.4),
                          batchsize = c(5L,100L),
-                         timesteps = c(5L,200L),
+                         timesteps = c(5L,100L),
                          epochs_opt = 15,
                          epochs_lstm = 100,
                          earlystop = 8,
                          validation_split = 0.25,
-                         initPoints = 20){
+                         initPoints = 20,
+                         duplicate = FALSE){
   
   time1 <- as.numeric(Sys.time())
   
   obj_func <- function(layers, units, dropout, batchsize, timesteps) { 
     
-   train.data <- dataPrepLSTM(x = x, y = y, timesteps = timesteps)
+   train.data <- dataPrepLSTM(x = x, y = y, timesteps = timesteps, duplicate = duplicate)
       
     
     mod.lstm <- create_LSTM(layers = layers, 
@@ -613,7 +655,7 @@ bayes_opt_LSTM <- function(x,
                         y=train.data$y,
                         epochs = epochs_lstm, 
                         verbose = 0, 
-                        shuffle = FALSE, 
+                        shuffle = TRUE, 
                         batch_size = batchsize,
                         validation_split = validation_split, 
                         callbacks = list(
@@ -687,6 +729,350 @@ bayes_opt_LSTM <- function(x,
 
 
 
+########################################
+# Function to create custom GRU models
+########################################
+
+# This function is mainly used in the Bayesian optimization for GRU models
+#  but can also be used to create GRU models outside of this.
+
+
+# @ layers:     number of layers of the GRU
+# @ units:      number of units per layer
+# @ dropout:    dropout rate
+# @ timesteps:  time step size of the input data
+# @ n_features: number of features used (x variables)
+
+create_GRU <- function(layers, units, dropout,
+                        timesteps,
+                        n_features){
+  
+  
+  input <- layer_input(shape = c(timesteps, n_features))
+  for(lay in 1:layers){
+    # return sequences on for all except for last layer
+    if(lay < layers) {
+      return_sequences_flag <- TRUE
+    } else {
+      return_sequences_flag <- FALSE
+    }
+    # add a gru layer
+    if(lay == 1) {
+      output <- input %>% layer_gru(units = units,
+                                     return_sequences = return_sequences_flag,
+                                     dropout = dropout)
+    } else {
+      output <- output %>% layer_gru(units = units,
+                                      return_sequences = return_sequences_flag,
+                                      dropout = dropout)
+    }
+  }
+  output <- output %>% layer_dense(1)
+  model <- keras_model(input, output) %>%
+    keras::compile(loss = "mse",
+                   optimizer = "adam")  
+  return(model)
+}
+
+
+
+#############################################
+# Bayesian optimization for GRU Models
+#############################################
+
+# Implementation of Bayesian hyper parameter optimization for GRU.
+# Take care: optimization can take quite long. On my machine (GTX 3070) a run with default parameters takes
+# between 1 and 3 hours (depends on how complex the optimal model is).
+# Returns a list with the optimized hyper parameter, the optimized model, and a summary of the Bayesian optimization.
+
+
+# @ x:      predictor variables in a 2D format. Input data should be standard normalized. Creates the needed 3D format inside.
+# @ y:      target variable in a 1D format. Input data should be standard normalized. Creates the needed 2D format inside.
+# @
+# @
+# @
+# @
+# @
+# @
+# @
+# @
+# @
+# @
+# @ duplicate:  vector giving info about duplication of min or max values for training: c(mode, proportion, times) 
+#               ex.: c(max,0.9,1); c(min,0.1,1) adds the highest/lowest 10% of the values 1 time
+
+bayes_opt_GRU <- function(x, 
+                           y, 
+                           layers = c(1L,5L), 
+                           units = c(5L,150L),
+                           dropout = c(0,0.4),
+                           batchsize = c(5L,100L),
+                           timesteps = c(5L,100L),
+                           epochs_opt = 15,
+                           epochs_gru = 100,
+                           earlystop = 8,
+                           validation_split = 0.25,
+                           initPoints = 20,
+                           duplicate = FALSE){
+  
+  time1 <- as.numeric(Sys.time())
+  
+  obj_func <- function(layers, units, dropout, batchsize, timesteps) { 
+    
+    train.data <- dataPrepLSTM(x = x, y = y, timesteps = timesteps, duplicate = duplicate)
+    
+    
+    mod.lstm <- create_GRU(layers = layers, 
+                            units = units,
+                            dropout = dropout,
+                            timesteps = timesteps,
+                            n_features = dim(train.data$x)[3])
+    
+    history_gru <- fit(object = mod.lstm, 
+                        x=train.data$x, 
+                        y=train.data$y,
+                        epochs = epochs_gru, 
+                        verbose = 0, 
+                        shuffle = TRUE, 
+                        batch_size = batchsize,
+                        validation_split = validation_split, 
+                        callbacks = list(
+                          callback_early_stopping(patience = earlystop, restore_best_weights = TRUE, 
+                                                  mode = "min", monitor = "val_loss"))
+    )
+    
+    lst <- list(
+      
+      # First argument must be named as "Score"
+      # Function finds maxima so inverting the output
+      Score = -min(history_gru$metrics$val_loss))
+    
+    return(lst)
+  }
+  
+  
+  bounds <- list(layers = layers, 
+                 units = units, 
+                 dropout = dropout, 
+                 batchsize = batchsize, 
+                 timesteps = timesteps)
+  
+  
+  set.seed(1234)
+  bayes_out <- bayesOpt(FUN = obj_func, bounds = bounds, initPoints = initPoints, iters.n = epochs_opt)
+  
+  # Get optimized parameters
+  opt_params <- getBestPars(bayes_out)
+  
+  
+  # create optimized data set
+  
+  opt_data <- dataPrepLSTM(x = x,
+                           y = y,
+                           timesteps = opt_params$timesteps)
+  
+  
+  # create a optimized gru model
+  
+  opt_mdl <- create_GRU(layers = opt_params$layers, 
+                         units = opt_params$units,
+                         dropout = opt_params$dropout,
+                         timesteps = opt_params$timesteps,
+                         n_features = dim(opt_data$x)[3])
+  
+  
+  # Fit a gru model
+  opt_history_gru <- fit(object = opt_mdl, 
+                          x=opt_data$x, 
+                          y=opt_data$y,
+                          epochs = epochs_gru, 
+                          verbose = 0, 
+                          shuffle = FALSE, 
+                          batch_size = opt_params$batchsize,
+                          validation_split = validation_split, 
+                          callbacks = list(
+                            callback_early_stopping(patience = earlystop, restore_best_weights = TRUE, 
+                                                    mode = "min", monitor = "val_loss")))
+  
+  output_list <- list(optimized_param = data.frame(getBestPars(bayes_out)),
+                      optimized_history = opt_history_gru,
+                      optimized_mod = opt_mdl,
+                      bayes_summary = bayes_out$scoreSummary,
+                      optimized_input_dim = dim(opt_data$x))
+  
+  print(paste("optimization completed in: ", as.numeric(Sys.time()-time1)%/%60, " minutes ",
+              round(as.numeric(Sys.time()-time1)%%60, digits = 1), " seconds"))
+  return(output_list)
+}
+
+
+########################################
+# Function to create custom NN models
+########################################
+
+# This function is mainly used in the Bayesian optimization for GRU models
+#  but can also be used to create GRU models outside of this.
+
+
+# @ layers:     number of layers of the GRU
+# @ units:      number of units per layer
+# @ dropout:    dropout rate
+# @ timesteps:  time step size of the input data
+# @ n_features: number of features used (x variables)
+
+create_NN <- function(layers, 
+                      units, 
+                      dropout,
+                      n_features,
+                      activation = "softmax"){
+  
+  
+  input <- layer_input(shape = n_features)
+  for(lay in 1:layers){
+    # return sequences on for all except for last layer
+    
+    # add a NN layer
+    if(lay == 1) {
+      output <- input %>% layer_dense(units = units,
+                                    activation = activation)
+    } else {
+      output <- output %>% layer_dropout(rate = dropout)
+      output <- output %>% layer_dense(units = units,
+                                     activation = activation)
+    }
+  }
+  output <- output %>% layer_dense(units = 1)
+  model <- keras_model(input, output) %>%
+    keras::compile(loss = "mse",
+                   optimizer = "adam")  
+  return(model)
+}
+
+
+
+#############################################
+# Bayesian optimization for neural network Models
+#############################################
+
+# Implementation of Bayesian hyper parameter optimization for NN.
+# Take care: optimization can take quite long. On my machine (GTX 3070) a run with default parameters takes
+# between 1 and 3 hours (depends on how complex the optimal model is).
+# Returns a list with the optimized hyper parameter, the optimized model, and a summary of the Bayesian optimization.
+
+
+# @ x:      predictor variables in a 2D format. Input data should be standard normalized. Creates the needed 3D format inside.
+# @ y:      target variable in a 1D format. Input data should be standard normalized. Creates the needed 2D format inside.
+# @
+# @
+# @
+# @
+# @
+# @
+# @
+# @
+# @
+# @
+# @ duplicate:  vector giving info about duplication of min or max values for training: c(mode, proportion, times) 
+#               ex.: c(max,0.9,1); c(min,0.1,1) adds the highest/lowest 10% of the values 1 time
+
+bayes_opt_NN <- function(x, 
+                         y, 
+                         layers = c(1L,5L), 
+                         units = c(5L,150L),
+                         dropout = c(0,0.4),
+                         batchsize = c(5L,100L),
+                         epochs_opt = 15,
+                         epochs_nn = 100,
+                         earlystop = 8,
+                         validation_split = 0.25,
+                         initPoints = 20,
+                         duplicate = FALSE,
+                         activation = "softmax"){
+  
+  time1 <- as.numeric(Sys.time())
+  
+  obj_func <- function(layers, units, dropout, batchsize) { 
+    
+    
+    mod.nn <- create_NN(layers = layers, 
+                        units = units,
+                        dropout = dropout,
+                        n_features = dim(x)[2],
+                        activation = activation)
+    
+    history_nn <- fit(object = mod.nn, 
+                        x=x, 
+                        y=y,
+                        epochs = epochs_nn, 
+                        verbose = 0, 
+                        shuffle = TRUE, 
+                        batch_size = batchsize,
+                        validation_split = validation_split, 
+                        callbacks = list(
+                          callback_early_stopping(patience = earlystop, restore_best_weights = TRUE, 
+                                                  mode = "min", monitor = "val_loss"))
+    )
+    
+    lst <- list(
+      
+      # First argument must be named as "Score"
+      # Function finds maxima so inverting the output
+      Score = -min(history_nn$metrics$val_loss))
+    
+    return(lst)
+  }
+  
+  
+  bounds <- list(layers = layers, 
+                 units = units, 
+                 dropout = dropout, 
+                 batchsize = batchsize)
+  
+  
+  set.seed(1234)
+  bayes_out <- bayesOpt(FUN = obj_func, bounds = bounds, initPoints = initPoints, iters.n = epochs_opt)
+  
+  # Get optimized parameters
+  opt_params <- getBestPars(bayes_out)
+  
+  
+  # create optimized data set
+  
+  
+  
+  # create a optimized nn model
+  
+  opt_mdl <- create_NN(layers = opt_params$layers, 
+                        units = opt_params$units,
+                        dropout = opt_params$dropout,
+                        n_features = dim(x)[2])
+  
+  
+  # Fit a nn model
+  opt_history_nn <- fit(object = opt_mdl, 
+                         x=x, 
+                         y=y,
+                         epochs = epochs_nn, 
+                         verbose = 0, 
+                         shuffle = FALSE, 
+                         batch_size = opt_params$batchsize,
+                         validation_split = validation_split, 
+                         callbacks = list(
+                           callback_early_stopping(patience = earlystop, restore_best_weights = TRUE, 
+                                                   mode = "min", monitor = "val_loss")))
+  
+  output_list <- list(optimized_param = data.frame(getBestPars(bayes_out)),
+                      optimized_history = opt_history_nn,
+                      optimized_mod = opt_mdl,
+                      bayes_summary = bayes_out$scoreSummary)
+  
+  print(paste("optimization completed in: ", as.numeric(Sys.time()-time1)%/%60, " minutes ",
+              round(as.numeric(Sys.time()-time1)%%60, digits = 1), " seconds"))
+  return(output_list)
+}
+
+
+
 #############################################
 # calculate monthly means of measured and modeled data
 #############################################
@@ -695,20 +1081,38 @@ bayes_opt_LSTM <- function(x,
 # 
 
 
-# @ x:      predictor variables in a 2D format. Input data should be standard normalized. Creates the needed 3D format inside.
-# @ y:      target variable in a 1D format. Input data should be standard normalized. Creates the needed 2D format inside.
-# @
+# @ measured:   predictor variables in a 2D format. Input data should be standard normalized. Creates the needed 3D format inside.
+# @ modeled:    target variable in a 1D format. Input data should be standard normalized. Creates the needed 2D format inside.
+# @ date:       ???
 
-monthly_mean <- function(measured, modeled, date){
+monthly_mean <- function(measured, 
+                         modeled, 
+                         date){
+  
+  skip <- length(modeled)-length(measured)
+  
+  # check if modeled and measured data have the same length and shorten the modeled data accordingly
+  if(skip<0){
+    measured <- tail(measured, n=skip)
+    date <- tail(date, n = skip)
+  }
+  
+  # extract the year and month of the date
   year <- year(date)
   month <- month(date)
+  
+  # create data frame with year and months as factors to aggregate them later
   pre.out <- data.frame(year = as.factor(year), 
                         month = as.factor(month), 
                         measured= measured, 
                         modeled = modeled)
+  
+  # aggregate monthly mean values of measured and modeled data
   output.l <- aggregate(x = cbind(measured, modeled)~year+month, 
                       data = pre.out,
                       FUN = "mean")
+  
+  # transform long data frame with both monthly mean values into two seperate wide data frames 
   output.w <- list(measured = spread(data = output.l[,1:3], key = "month", value = "measured")[,-1],
                    modeled = spread(data = output.l[,c(1,2,4)], key = "month", value = "modeled")[,-1])
   colnames(output.w$measured) <- month.abb
@@ -719,30 +1123,252 @@ monthly_mean <- function(measured, modeled, date){
 
 
 #############################################
-# calculate monthly means of measured and modeled data
+# Plot monthly mean values based on data generated by monthly_mean
+#############################################
+
+# This Function returns a  plot based on the monthly mean data generated by the 
+# function monthly_mean. 
+
+
+# @ data:   a list generated by the function monthly_mean
+# @ main:   string to name the plot
+
+
+monthly_plot <- function(data, main="Titel"){
+  plot(colMeans(data$measured, na.rm = TRUE), 
+       type = "l", xlab = "Month", ylab = "Mean Discharge", 
+       xaxt = "n", col = "blue", main = main)
+  lines(colMeans(data$modeled, na.rm = TRUE), col = "chartreuse4")
+  axis(side = 1, at = 1:12, labels = month.abb)
+  legend("topright", legend = c("model", "data"), bty = "n", 
+         lty = 1, col = c("chartreuse4", "blue"))
+}
+
+
+#############################################
+# Analyzes the model based on validation data and saves the results
 #############################################
 
 # 
 # 
 
 
-# @ x:      predictor variables in a 2D format. Input data should be standard normalized. Creates the needed 3D format inside.
-# @ y:      target variable in a 1D format. Input data should be standard normalized. Creates the needed 2D format inside.
-# @
+# @ measured:     vector with measured data.
+# @ modeled:      vector with modeled data.
+# @ catchment:    string with catchment name. Used to generate the plot titels and save names.
+# @ unscale:      vector giving the standard deviation and mean used to transform the LSTM output back: c(std,mean)
+# @ mod_type:     String with model name. Use one of the exact strings: "xgb", "lstm", "lgbm", "gru", "nn"
+# @ model:        model if model type is xgb or lgbm
 
-monthly_plot <- function(data, main="Titel"){
-  plot(colMeans(data$measured), 
-       type = "l", ylim = c(0,75), xlab = "Month", ylab = "Mean Discharge", 
-       xaxt = "n", col = "blue", main = main)
-  lines(colMeans(data$modeled), col = "green")
-  axis(side = 1, at = 1:12, labels = month.abb)
-  legend("topright", legend = c("model", "data"), bty = "n", 
-         lty = 1, col = c("green", "blue"))
+analyze_model <- function(measured, 
+                          modeled,
+                          catchment,
+                          unscale=NULL,
+                          mod_type,
+                          model=NULL){
+  if(mod_type=="xgb"){
+    
+    rmse <- round(sqrt(mean((modeled-measured)^2)), digits = 2)
+    mod_mean <- round(mean(modeled), digits = 2)
+    measured_mean <- round(mean(measured), digits = 2)
+    mod_top10 <- round(quantile(x = modeled, probs = 0.9), digits = 2)
+    measured_top10 <- round(quantile(x = measured, probs = 0.9), digits = 2)
+    mod_low10 <- round(quantile(x = modeled, probs = 0.1), digits = 2)
+    measured_low10 <- round(quantile(x = measured, probs = 0.1), digits = 2)
+    mod_nse <- round(NSE(sim = as.matrix(modeled), obs = as.matrix(measured)), digits = 3)
+    mod_kge <- round(KGE(sim = as.matrix(modeled), obs = as.matrix(measured)),digits = 3)
+    
+    
+    maxy <- max(measured,modeled)*1.1
+    miny <- min(modeled-measured)*1.1
+    path1 <- paste("../Results/Plots/", catchment, "_XGBoost_ts.pdf", sep = "")
+    path2 <- paste("../Results/Plots/", catchment, "_XGBoost_importance.pdf", sep = "")
+    
+    pdf(file = path1, width = 14, height = 7)
+    plot(measured, type = "l", col="blue", ylim = c(miny,maxy), 
+         main = paste(catchment, "XGBoost"), ylab = "Discharge")
+    lines(modeled, col="chartreuse4")
+    lines(modeled-measured, col="red")
+    abline(h=0)
+    abline(h = measured_mean, col = "blue")
+    abline(h = mod_mean, col = "chartreuse4")
+    legend("topright", legend = c("model", "data", "model - data"), bty = "n", 
+           lty = 1, col = c("chartreuse4", "blue", "red"))
+    dev.off()
+    
+    pdf(file = path2)
+    xgb.plot.importance(xgb.importance(model=model), top_n = 15)
+    dev.off()
+  }
+  
+  if(mod_type=="lgbm") {
+    
+    rmse <- round(sqrt(mean((modeled-measured)^2)), digits = 2)
+    mod_mean <- round(mean(modeled), digits = 2)
+    measured_mean <- round(mean(measured), digits = 2)
+    mod_top10 <- round(quantile(x = modeled, probs = 0.9), digits = 2)
+    measured_top10 <- round(quantile(x = measured, probs = 0.9), digits = 2)
+    mod_low10 <- round(quantile(x = modeled, probs = 0.1), digits = 2)
+    measured_low10 <- round(quantile(x = measured, probs = 0.1), digits = 2)
+    mod_nse <- round(NSE(sim = as.matrix(modeled), obs = as.matrix(measured)), digits = 3)
+    mod_kge <- round(KGE(sim = as.matrix(modeled), obs = as.matrix(measured)),digits = 3)
+    
+    
+    maxy <- max(measured,modeled)*1.1
+    miny <- min(modeled-measured)*1.1
+    path1 <- paste("../Results/Plots/", catchment, "_LightGBM_ts.pdf", sep = "")
+    path2 <- paste("../Results/Plots/", catchment, "_LightGBM_importance.pdf", sep = "")
+    
+    pdf(file = path1, width = 14, height = 7)
+    plot(measured, type = "l", col="blue", ylim = c(miny,maxy), 
+         main = paste(catchment, "LightGBM"), ylab = "Discharge")
+    lines(modeled, col="chartreuse4")
+    lines(modeled-measured, col="red")
+    abline(h=0)
+    abline(h = measured_mean, col = "blue")
+    abline(h = mod_mean, col = "chartreuse4")
+    legend("topright", legend = c("model", "data", "model - data"), bty = "n", 
+           lty = 1, col = c("chartreuse4", "blue", "red"))
+    dev.off()
+    
+    pdf(file = path2)
+    lgb.plot.importance(lgb.importance(model=model),top_n = 15)
+    dev.off()
+    
+  }
+  
+  if(mod_type=="lstm") {
+    
+    # shorten the measured data to match the modeled
+    skip <- length(modeled)-length(measured)
+    measured <- tail(measured, n = skip)
+    
+    # transform the modeled data back
+    modeled <- modeled*unscale[1]+unscale[2]
+    
+    # calculate statistics
+    rmse <- round(sqrt(mean((modeled-measured)^2)), digits = 2)
+    mod_mean <- round(mean(modeled), digits = 2)
+    measured_mean <- round(mean(measured), digits = 2)
+    mod_top10 <- round(quantile(x = modeled, probs = 0.9), digits = 2)
+    measured_top10 <- round(quantile(x = measured, probs = 0.9), digits = 2)
+    mod_low10 <- round(quantile(x = modeled, probs = 0.1), digits = 2)
+    measured_low10 <- round(quantile(x = measured, probs = 0.1), digits = 2)
+    mod_nse <- round(NSE(sim = as.matrix(modeled), obs = as.matrix(measured)), digits = 3)
+    mod_kge <- round(KGE(sim = as.matrix(modeled), obs = as.matrix(measured)),digits = 3)
+    
+    
+    maxy <- max(measured,modeled)*1.1
+    miny <- min(modeled-measured)*1.1
+    
+    path1 <- paste("../Results/Plots/", catchment, "_LSTM_ts.pdf", sep = "")
+  
+    pdf(file = path1, width = 14, height = 7)
+    plot(measured, type = "l", col="blue", ylim = c(miny,maxy), 
+         main = paste(catchment, "LSTM"), ylab = "Discharge")
+    lines(modeled, col="chartreuse4")
+    lines(modeled-measured, col="red")
+    abline(h=0)
+    abline(h = measured_mean, col = "blue")
+    abline(h = mod_mean, col = "chartreuse4")
+    legend("topright", legend = c("model", "data", "model - data"), bty = "n", 
+           lty = 1, col = c("chartreuse4", "blue", "red"))
+    dev.off()
+    return(modeled)
+  }
+  
+  if(mod_type=="gru") {
+    
+    # shorten the measured data to match the modeled
+    skip <- length(modeled)-length(measured)
+    measured <- tail(measured, n = skip)
+    
+    # transform the modeled data back
+    modeled <- modeled*unscale[1]+unscale[2]
+    
+    # calculate statistics
+    rmse <- round(sqrt(mean((modeled-measured)^2)), digits = 2)
+    mod_mean <- round(mean(modeled), digits = 2)
+    measured_mean <- round(mean(measured), digits = 2)
+    mod_top10 <- round(quantile(x = modeled, probs = 0.9), digits = 2)
+    measured_top10 <- round(quantile(x = measured, probs = 0.9), digits = 2)
+    mod_low10 <- round(quantile(x = modeled, probs = 0.1), digits = 2)
+    measured_low10 <- round(quantile(x = measured, probs = 0.1), digits = 2)
+    mod_nse <- round(NSE(sim = as.matrix(modeled), obs = as.matrix(measured)), digits = 3)
+    mod_kge <- round(KGE(sim = as.matrix(modeled), obs = as.matrix(measured)),digits = 3)
+    
+    
+    maxy <- max(measured,modeled)*1.1
+    miny <- min(modeled-measured)*1.1
+    
+    path1 <- paste("../Results/Plots/", catchment, "_GRU_ts.pdf", sep = "")
+    
+    pdf(file = path1, width = 14, height = 7)
+    plot(measured, type = "l", col="blue", ylim = c(miny,maxy), 
+         main = paste(catchment, "GRU"), ylab = "Discharge")
+    lines(modeled, col="chartreuse4")
+    lines(modeled-measured, col="red")
+    abline(h=0)
+    abline(h = measured_mean, col = "blue")
+    abline(h = mod_mean, col = "chartreuse4")
+    legend("topright", legend = c("model", "data", "model - data"), bty = "n", 
+           lty = 1, col = c("chartreuse4", "blue", "red"))
+    dev.off()
+    return(modeled)
+  }
+  
+  if(mod_type=="nn") {
+    
+    # transform the modeled data back
+    modeled <- modeled*unscale[1]+unscale[2]
+    
+    # calculate statistics
+    rmse <- round(sqrt(mean((modeled-measured)^2)), digits = 2)
+    mod_mean <- round(mean(modeled), digits = 2)
+    measured_mean <- round(mean(measured), digits = 2)
+    mod_top10 <- round(quantile(x = modeled, probs = 0.9), digits = 2)
+    measured_top10 <- round(quantile(x = measured, probs = 0.9), digits = 2)
+    mod_low10 <- round(quantile(x = modeled, probs = 0.1), digits = 2)
+    measured_low10 <- round(quantile(x = measured, probs = 0.1), digits = 2)
+    mod_nse <- round(NSE(sim = as.matrix(modeled), obs = as.matrix(measured)), digits = 3)
+    mod_kge <- round(KGE(sim = as.matrix(modeled), obs = as.matrix(measured)),digits = 3)
+    
+    
+    maxy <- max(measured,modeled)*1.1
+    miny <- min(modeled-measured)*1.1
+    
+    path1 <- paste("../Results/Plots/", catchment, "_NN_ts.pdf", sep = "")
+    
+    pdf(file = path1, width = 14, height = 7)
+    plot(measured, type = "l", col="blue", ylim = c(miny,maxy), 
+         main = paste(catchment, "NN"), ylab = "Discharge")
+    lines(modeled, col="chartreuse4")
+    lines(modeled-measured, col="red")
+    abline(h=0)
+    abline(h = measured_mean, col = "blue")
+    abline(h = mod_mean, col = "chartreuse4")
+    legend("topright", legend = c("model", "data", "model - data"), bty = "n", 
+           lty = 1, col = c("chartreuse4", "blue", "red"))
+    dev.off()
+    return(modeled)
+  }
+  
+  cat("\n",catchment, ";",
+      mod_type, ";",
+      rmse, ";",
+      mod_nse, ";",
+      mod_kge, ";",
+      mod_mean, ";",
+      measured_mean, ";",
+      mod_top10, ";",
+      measured_top10, ";",
+      mod_low10, ";",
+      measured_low10, 
+      file = "../Results/Models/model_stat.txt",
+      append = TRUE,
+      sep = "")
+  
 }
-
-
-
-
 
 
 

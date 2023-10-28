@@ -103,91 +103,91 @@ data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_20
 #                    header = TRUE, sep = ";")
 
 
-h.data <- data[,c(1,2,5,6)]
-dat <- strptime(data$date, format = "%Y-%m-%d")
-dat.y <- as.numeric(format(dat, "%Y"))
-even <- rep(FALSE,length(dat))
-even[61:14549] <- dat.y[61:14549]%%2 == 0
-skp <- 1
-count <- 0
-skipunreg <- NA
-for (i in 1981:2020) {
-  count <- count + 1
-  if (skp!=3) {skipunreg[count]<-i; skp <- skp + 1}
-  else {skp <- 1}
-}
-skipunreg <- skipunreg[!is.na(skipunreg)]
-skipunreg <- dat.y%in%skipunreg
-calib2 <- rep(FALSE, length(dat.y))
-calib2[61:14549] <- skipunreg[61:14549]
-valid2 <- rep(FALSE, length(dat.y))
-valid2[61:14549] <- !calib2[61:14549]
-
-h.data$lag1preci <- shift(x=h.data$precipitation.mm.d.,n=1, type= "lag")
-h.data$lag2preci <- shift(x=h.data$precipitation.mm.d.,n=2, type= "lag")
-h.data$lag3preci <- shift(x=h.data$precipitation.mm.d.,n=3, type= "lag")
-h.data$lag4preci <- shift(x=h.data$precipitation.mm.d.,n=4, type= "lag")
-h.data$lag5preci <- shift(x=h.data$precipitation.mm.d.,n=5, type= "lag")
-h.data$lag6preci <- shift(x=h.data$precipitation.mm.d.,n=6, type= "lag")
-h.data$lag7preci <- shift(x=h.data$precipitation.mm.d.,n=7, type= "lag")
-
-h.data$lag1temp <- shift(x=h.data$temperature..C.,n=1, type= "lag")
-h.data$lag2temp <- shift(x=h.data$temperature..C.,n=2, type= "lag")
-h.data$lag3temp <- shift(x=h.data$temperature..C.,n=3, type= "lag")
-h.data$lag4temp <- shift(x=h.data$temperature..C.,n=4, type= "lag")
-h.data$lag5temp <- shift(x=h.data$temperature..C.,n=5, type= "lag")
-h.data$lag6temp <- shift(x=h.data$temperature..C.,n=6, type= "lag")
-h.data$lag7temp <- shift(x=h.data$temperature..C.,n=7, type= "lag")
-
-h.data$sum2preci <- frollsum(x=h.data$precipitation.mm.d., n= 2)
-h.data$sum3preci <- frollsum(x=h.data$precipitation.mm.d., n= 3)
-h.data$sum4preci <- frollsum(x=h.data$precipitation.mm.d., n= 4)
-h.data$sum5preci <- frollsum(x=h.data$precipitation.mm.d., n= 5)
-h.data$sum6preci <- frollsum(x=h.data$precipitation.mm.d., n= 6)
-h.data$sum7preci <- frollsum(x=h.data$precipitation.mm.d., n= 7)
-h.data$sum30preci <- frollsum(x=h.data$precipitation.mm.d., n= 30)
-
-h.data$mean3temp <- frollmean(x=h.data$temperature..C., n=3, align = "right")
-h.data$mean7temp <- frollmean(x=h.data$temperature..C., n=7, align = "right")
-h.data$mean30temp <- frollmean(x=h.data$temperature..C., n=30, align = "right")
-h.data$mean60temp <- frollmean(x=h.data$temperature..C., n=60, align = "right")
-h.data$mean30templag30 <- shift(x=h.data$mean30temp ,n=30, type= "lag")
-h.data$sum30precilag30 <- shift(x=h.data$sum30preci ,n=30, type= "lag")
-
-filter <- as.data.frame(h.data$discharge_vol.m3.s.)
-filter$lowpass15 <- frollmean(x=h.data$discharge_vol.m3.s., n=15, align = "center")
-filter$lowpass31 <- frollmean(x=h.data$discharge_vol.m3.s., n=31, align = "center")
-filter$lowpass45 <- frollmean(x=h.data$discharge_vol.m3.s., n=45, align = "center")
-filter$lowpass61 <- frollmean(x=h.data$discharge_vol.m3.s., n=61, align = "center")
-filter$lowpass121 <- frollmean(x=h.data$discharge_vol.m3.s., n=121, align = "center")
-filter$highpass15 <- h.data$discharge_vol.m3.s.-filter$lowpass15
-filter$highpass31 <- h.data$discharge_vol.m3.s.-filter$lowpass31
-filter$highpass45 <- h.data$discharge_vol.m3.s.-filter$lowpass45
-filter$highpass61 <- h.data$discharge_vol.m3.s.-filter$lowpass61
-filter$highpass121 <- h.data$discharge_vol.m3.s.-filter$lowpass121
+# h.data <- data[,c(1,2,5,6)]
+# dat <- strptime(data$date, format = "%Y-%m-%d")
+# dat.y <- as.numeric(format(dat, "%Y"))
+# even <- rep(FALSE,length(dat))
+# even[61:14549] <- dat.y[61:14549]%%2 == 0
+# skp <- 1
+# count <- 0
+# skipunreg <- NA
+# for (i in 1981:2020) {
+#   count <- count + 1
+#   if (skp!=3) {skipunreg[count]<-i; skp <- skp + 1}
+#   else {skp <- 1}
+# }
+# skipunreg <- skipunreg[!is.na(skipunreg)]
+# skipunreg <- dat.y%in%skipunreg
+# calib2 <- rep(FALSE, length(dat.y))
+# calib2[61:14549] <- skipunreg[61:14549]
+# valid2 <- rep(FALSE, length(dat.y))
+# valid2[61:14549] <- !calib2[61:14549]
+# 
+# h.data$lag1preci <- shift(x=h.data$precipitation.mm.d.,n=1, type= "lag")
+# h.data$lag2preci <- shift(x=h.data$precipitation.mm.d.,n=2, type= "lag")
+# h.data$lag3preci <- shift(x=h.data$precipitation.mm.d.,n=3, type= "lag")
+# h.data$lag4preci <- shift(x=h.data$precipitation.mm.d.,n=4, type= "lag")
+# h.data$lag5preci <- shift(x=h.data$precipitation.mm.d.,n=5, type= "lag")
+# h.data$lag6preci <- shift(x=h.data$precipitation.mm.d.,n=6, type= "lag")
+# h.data$lag7preci <- shift(x=h.data$precipitation.mm.d.,n=7, type= "lag")
+# 
+# h.data$lag1temp <- shift(x=h.data$temperature..C.,n=1, type= "lag")
+# h.data$lag2temp <- shift(x=h.data$temperature..C.,n=2, type= "lag")
+# h.data$lag3temp <- shift(x=h.data$temperature..C.,n=3, type= "lag")
+# h.data$lag4temp <- shift(x=h.data$temperature..C.,n=4, type= "lag")
+# h.data$lag5temp <- shift(x=h.data$temperature..C.,n=5, type= "lag")
+# h.data$lag6temp <- shift(x=h.data$temperature..C.,n=6, type= "lag")
+# h.data$lag7temp <- shift(x=h.data$temperature..C.,n=7, type= "lag")
+# 
+# h.data$sum2preci <- frollsum(x=h.data$precipitation.mm.d., n= 2)
+# h.data$sum3preci <- frollsum(x=h.data$precipitation.mm.d., n= 3)
+# h.data$sum4preci <- frollsum(x=h.data$precipitation.mm.d., n= 4)
+# h.data$sum5preci <- frollsum(x=h.data$precipitation.mm.d., n= 5)
+# h.data$sum6preci <- frollsum(x=h.data$precipitation.mm.d., n= 6)
+# h.data$sum7preci <- frollsum(x=h.data$precipitation.mm.d., n= 7)
+# h.data$sum30preci <- frollsum(x=h.data$precipitation.mm.d., n= 30)
+# 
+# h.data$mean3temp <- frollmean(x=h.data$temperature..C., n=3, align = "right")
+# h.data$mean7temp <- frollmean(x=h.data$temperature..C., n=7, align = "right")
+# h.data$mean30temp <- frollmean(x=h.data$temperature..C., n=30, align = "right")
+# h.data$mean60temp <- frollmean(x=h.data$temperature..C., n=60, align = "right")
+# h.data$mean30templag30 <- shift(x=h.data$mean30temp ,n=30, type= "lag")
+# h.data$sum30precilag30 <- shift(x=h.data$sum30preci ,n=30, type= "lag")
+# 
+# filter <- as.data.frame(h.data$discharge_vol.m3.s.)
+# filter$lowpass15 <- frollmean(x=h.data$discharge_vol.m3.s., n=15, align = "center")
+# filter$lowpass31 <- frollmean(x=h.data$discharge_vol.m3.s., n=31, align = "center")
+# filter$lowpass45 <- frollmean(x=h.data$discharge_vol.m3.s., n=45, align = "center")
+# filter$lowpass61 <- frollmean(x=h.data$discharge_vol.m3.s., n=61, align = "center")
+# filter$lowpass121 <- frollmean(x=h.data$discharge_vol.m3.s., n=121, align = "center")
+# filter$highpass15 <- h.data$discharge_vol.m3.s.-filter$lowpass15
+# filter$highpass31 <- h.data$discharge_vol.m3.s.-filter$lowpass31
+# filter$highpass45 <- h.data$discharge_vol.m3.s.-filter$lowpass45
+# filter$highpass61 <- h.data$discharge_vol.m3.s.-filter$lowpass61
+# filter$highpass121 <- h.data$discharge_vol.m3.s.-filter$lowpass121
 
 p.data <- dataPrep(data[,c(1,2,5,6)])
 
-acf(x=h.data$discharge_vol.m3.s.,plot = TRUE, lag.max = 365)
+acf(x=p.data$data$discharge,plot = TRUE, lag.max = 365)
 
-h.weights.max <- rep(1,length(h.data$discharge_vol.m3.s.))
-h.weights.min <- rep(1,length(h.data$discharge_vol.m3.s.))
-h.weights.max[h.data$discharge_vol.m3.s.>quantile(x=h.data$discharge_vol.m3.s., probs = 0.9)] <- 3
-h.weights.min[h.data$discharge_vol.m3.s.>quantile(x=h.data$discharge_vol.m3.s., probs = 0.2)] <- 3
-
-calib.h <- 61:9132
-valid.h <- 9133:14549 #14610
-h.data.calib <- h.data[calib.h,]
-h.data.valid <- h.data[valid.h,]
-
-filter.max <- quantile(x=h.data$discharge_vol.m3.s., probs = 0.85)
-filter.min <- quantile(x=h.data$discharge_vol.m3.s., probs = 0.25)
-h.data.calib.max <- h.data.calib[h.data.calib$discharge_vol.m3.s.>filter.max,]
-h.data.calib.mid <- h.data.calib[h.data.calib$discharge_vol.m3.s.<filter.max&h.data.calib$discharge_vol.m3.s.>filter.min,]
-h.data.calib.min <- h.data.calib[h.data.calib$discharge_vol.m3.s.<filter.min,]
-h.data.valid.max <- h.data.valid[h.data.valid$discharge_vol.m3.s.>filter.max,]
-h.data.valid.mid <- h.data.valid[h.data.valid$discharge_vol.m3.s.<filter.max&h.data.valid$discharge_vol.m3.s.>filter.min,]
-h.data.valid.min <- h.data.valid[h.data.valid$discharge_vol.m3.s.<filter.min,]
+# h.weights.max <- rep(1,length(h.data$discharge_vol.m3.s.))
+# h.weights.min <- rep(1,length(h.data$discharge_vol.m3.s.))
+# h.weights.max[h.data$discharge_vol.m3.s.>quantile(x=h.data$discharge_vol.m3.s., probs = 0.9)] <- 3
+# h.weights.min[h.data$discharge_vol.m3.s.>quantile(x=h.data$discharge_vol.m3.s., probs = 0.2)] <- 3
+# 
+# calib.h <- 61:9132
+# valid.h <- 9133:14549 #14610
+# h.data.calib <- h.data[calib.h,]
+# h.data.valid <- h.data[valid.h,]
+# 
+# filter.max <- quantile(x=h.data$discharge_vol.m3.s., probs = 0.85)
+# filter.min <- quantile(x=h.data$discharge_vol.m3.s., probs = 0.25)
+# h.data.calib.max <- h.data.calib[h.data.calib$discharge_vol.m3.s.>filter.max,]
+# h.data.calib.mid <- h.data.calib[h.data.calib$discharge_vol.m3.s.<filter.max&h.data.calib$discharge_vol.m3.s.>filter.min,]
+# h.data.calib.min <- h.data.calib[h.data.calib$discharge_vol.m3.s.<filter.min,]
+# h.data.valid.max <- h.data.valid[h.data.valid$discharge_vol.m3.s.>filter.max,]
+# h.data.valid.mid <- h.data.valid[h.data.valid$discharge_vol.m3.s.<filter.max&h.data.valid$discharge_vol.m3.s.>filter.min,]
+# h.data.valid.min <- h.data.valid[h.data.valid$discharge_vol.m3.s.<filter.min,]
 
 
 maxdepth <- 3:10
@@ -778,30 +778,44 @@ source("functions.R")
 xgb_mod <- bayes_opt_xgb(data = as.matrix(p.data$data[calib,-1]), label = p.data$data[calib,1])
 
 xgb_thur <- xgb_mod
-save(lstm_thur, file = "../Results/Models/Thur_XBoost.RData")
+save(xgb_thur, file = "../Results/Models/Thur_XBoost.RData")
 
 pxgb1 <- predict(object = xgb_mod[[2]], newdata = as.matrix(p.data$data[valid,-1]))
 
-maxy <- max(pxgb1,p.data$data[valid,1])*1.1
-miny <- min(pxgb1-p.data$data[valid,1])*1.1
+analyze_model(measured = p.data$data$discharge[valid],
+              modeled = pxgb1,
+              catchment = "Thur",
+              mod_type = "xgb",
+              model = xgb_mod[[2]])
 
-rmse(p.data$data[valid,1], pxgb1)
-plot(p.data$data[valid,1], type = "l", col="blue", ylim = c(miny,maxy), main = "main", ylab = "Discharge")
-lines(pxgb1, col="green")
-lines(pxgb1-p.data$data[valid,1], col="red")
-abline(h=0)
-legend("topright", legend = c("model", "data", "model - data"), bty = "n", 
-       lty = 1, col = c("green", "blue", "red"))
+mon_mean <- monthly_mean(measured = p.data$data$discharge[valid],
+                         modeled = pxgb1,
+                         date = p.data$date[valid])
 
-mean(pxgb1)
-mean(h.data$discharge_vol.m3.s.[valid2])
-NSE(sim = as.matrix(pxgb1), obs = as.matrix(h.data$discharge_vol.m3.s.[valid2]))
-KGE(sim = as.matrix(pxgb1), obs = as.matrix(h.data$discharge_vol.m3.s.[valid2]))
+pdf(file = "../Results/Plots/Thur_XBoost_monthly.pdf")
+monthly_plot(data = mon_mean,
+             main = "Thur XGBoost")
+dev.off()
 
-xgb.plot.deepness(xgb_mod[[2]])
-xgb.plot.importance(xgb.importance(model=xgb_mod[[2]]))
-xgb.plot.shap.summary(data=as.matrix(h.data[calib.h,-c(1,2)]), model=xgb_mod)
-
+# maxy <- max(pxgb1,p.data$data[valid,1])*1.1
+# miny <- min(pxgb1-p.data$data[valid,1])*1.1
+# 
+# rmse(p.data$data[valid,1], pxgb1)
+# plot(p.data$data[valid,1], type = "l", col="blue", ylim = c(miny,maxy), main = "main", ylab = "Discharge")
+# lines(pxgb1, col="green")
+# lines(pxgb1-p.data$data[valid,1], col="red")
+# abline(h=0)
+# legend("topright", legend = c("model", "data", "model - data"), bty = "n", 
+#        lty = 1, col = c("green", "blue", "red"))
+# 
+# mean(pxgb1)
+# mean(h.data$discharge_vol.m3.s.[valid2])
+# NSE(sim = as.matrix(pxgb1), obs = as.matrix(h.data$discharge_vol.m3.s.[valid2]))
+# KGE(sim = as.matrix(pxgb1), obs = as.matrix(h.data$discharge_vol.m3.s.[valid2]))
+# 
+# xgb.plot.deepness(xgb_mod[[2]])
+# xgb.plot.importance(xgb.importance(model=xgb_mod[[2]]))
+# xgb.plot.shap.summary(data=as.matrix(h.data[calib.h,-c(1,2)]), model=xgb_mod)
 
 
 
@@ -812,7 +826,12 @@ h.data.scale <- scale(p.data$data, center = TRUE)
 
 
 
-lstm_mod2 <- bayes_opt_LSTM(x = h.data.scale[calib,-1], y = h.data.scale[calib,1], epochs_opt = 20, initPoints = 35)
+lstm_mod2 <- bayes_opt_LSTM(x = h.data.scale[calib,-1], 
+                            y = h.data.scale[calib,1], 
+                            epochs_opt = 30, 
+                            initPoints = 25
+                            # , duplicate = c("max", 0.9,1)
+                            )
 lstm_mod2$bayes_summary
 
 lstm_thur <- lstm_mod2
@@ -821,27 +840,46 @@ save(lstm_thur, file = "../Results/Models/Thur_LSTM.RData")
 h.data.lstm_val <- dataPrepLSTM(x = h.data.scale[valid,-1], 
                                 y = h.data.scale[valid,1], 
                                 timesteps = lstm_mod2$optimized_param$timesteps)
-wushu <- h.data$discharge_vol.m3.s.[valid]
+
+
+wushu <- p.data$data$discharge[valid]
 wushu <- wushu[-(1:lstm_mod2$optimized_param$timesteps-1)]
 pre_lstm <- predict(object = lstm_mod2$optimized_mod, x = h.data.lstm_val$x)
 
 
-
 me <- mean(p.data$data$discharge)
 std <- sd(p.data$data$discharge)
-rmse(wushu,pre_lstm*std+me) # 2040 *50.3518+46.78827  2020 *60.357+65.206 [9142:14610]
+pre_lstm_unscaled <-  analyze_model(measured = p.data$data$discharge[valid],
+                                    modeled = pre_lstm,
+                                    catchment = "Thur",
+                                    mod_type = "lstm",
+                                    unscale = c(std,me))
 
-maxy <- max(pre_lstm*std+me,wushu)
-miny <- min(pre_lstm*std+me-wushu)
-plot(wushu, type = "l", col = "blue", ylim = c(miny*1.1,maxy*1.1))
-lines(pre_lstm*std+me, col = "green")
-lines(pre_lstm*std+me-wushu, col = "red")
-abline(h=0)
+mon_mean <- monthly_mean(measured = p.data$data$discharge[valid],
+                         modeled = pre_lstm_unscaled,
+                         date = p.data$date[valid])
 
-mean(pre_lstm*std+me)
-mean(wushu)
-NSE(sim = as.matrix(pre_lstm*std+me), obs = as.matrix(wushu))
-KGE(sim = as.matrix(pre_lstm*std+me), obs = as.matrix(wushu))
+pdf(file = "../Results/Plots/Thur_LSTM_monthly.pdf")
+monthly_plot(data = mon_mean,
+             main = "Thur LSTM")
+dev.off()
+
+summary(lstm_mod2$optimized_mod)
+# me <- mean(p.data$data$discharge)
+# std <- sd(p.data$data$discharge)
+# rmse(wushu,pre_lstm*std+me) # 2040 *50.3518+46.78827  2020 *60.357+65.206 [9142:14610]
+# 
+# maxy <- max(pre_lstm*std+me,wushu)
+# miny <- min(pre_lstm*std+me-wushu)
+# plot(wushu, type = "l", col = "blue", ylim = c(miny*1.1,maxy*1.1))
+# lines(pre_lstm*std+me, col = "green")
+# lines(pre_lstm*std+me-wushu, col = "red")
+# abline(h=0)
+# 
+# mean(pre_lstm*std+me)
+# mean(wushu)
+# NSE(sim = as.matrix(pre_lstm*std+me), obs = as.matrix(wushu))
+# KGE(sim = as.matrix(pre_lstm*std+me), obs = as.matrix(wushu))
 
 
 
@@ -851,32 +889,153 @@ KGE(sim = as.matrix(pre_lstm*std+me), obs = as.matrix(wushu))
 lgbm_mod <- bayes_opt_lgb(data = as.matrix(p.data$data[calib,-1]), label = p.data$data[calib,1])
 
 lgb_thur <- lgbm_mod
-save(lstm_thur, file = "../Results/Models/Thur_LightGBM.RData")
+save(lgb_thur, file = "../Results/Models/Thur_LightGBM.RData")
 
 plgbm <- predict(object = lgbm_mod$optimized_mod, data = as.matrix(p.data$data[valid,-1]))
 
-maxy <- max(plgbm,p.data$data$discharge[valid])*1.1
-miny <- min(plgbm-p.data$data$discharge[valid])*1.1
 
-rmse(p.data$data$discharge[valid], plgbm)
-plot(p.data$data$discharge[valid], type = "l", col="blue", ylim = c(miny,maxy), main = "main", ylab = "Discharge")
-lines(plgbm, col="green")
-lines(plgbm-p.data$data$discharge[valid], col="red")
+analyze_model(measured = p.data$data$discharge[valid],
+              modeled = plgbm,
+              catchment = "Thur",
+              mod_type = "lgbm",
+              model = lgbm_mod[[2]])
+
+mon_mean <- monthly_mean(measured = p.data$data$discharge[valid],
+                         modeled = plgbm,
+                         date = p.data$date[valid])
+
+pdf(file = "../Results/Plots/Thur_LightGBM_monthly.pdf")
+monthly_plot(data = mon_mean,
+             main = "Thur LightGBM")
+dev.off()
+
+
+
+# maxy <- max(plgbm,p.data$data$discharge[valid])*1.1
+# miny <- min(plgbm-p.data$data$discharge[valid])*1.1
+# 
+# rmse(p.data$data$discharge[valid], plgbm)
+# plot(p.data$data$discharge[valid], type = "l", col="blue", ylim = c(miny,maxy), main = "main", ylab = "Discharge")
+# lines(plgbm, col="green")
+# lines(plgbm-p.data$data$discharge[valid], col="red")
+# abline(h=0)
+# legend("topright", legend = c("model", "data", "model - data"), bty = "n", 
+#        lty = 1, col = c("darkgreen", "blue", "red"))
+# 
+# mean(plgbm)
+# mean(p.data$data$discharge[valid])
+# NSE(sim = as.matrix(plgbm), obs = as.matrix(p.data$data$discharge[valid]))
+# KGE(sim = as.matrix(plgbm), obs = as.matrix(p.data$data$discharge[valid]))
+# 
+# 
+# lgb.plot.importance(lgb.importance(model=lgbm_mod$optimized_mod),top_n = 15)
+
+
+h.mean <- lapply(p.data$data, FUN = "mean",2, na.rm = TRUE)
+h.sd <- lapply(p.data$data, FUN = "sd",2)
+h.data.scale <- scale(p.data$data, center = TRUE)
+h.data.scale.mm <- normalize(p.data$data)
+
+
+
+
+gru_mod2 <- bayes_opt_NN(x = h.data.scale.[calib,-1], 
+                            y = h.data.scale.[calib,1], 
+                            epochs_opt = 2, 
+                            initPoints = 6
+                            # , duplicate = c("max", 0.9,1)
+                        )
+gru_mod2$bayes_summary
+
+gru_thur <- gru_mod2
+save(gru_thur, file = "../Results/Models/Thur_GRU.RData")
+
+h.data.gru_val <- dataPrepLSTM(x = h.data.scale.mm[valid,-1], 
+                                y = h.data.scale.mm[valid,1], 
+                                timesteps = gru_mod2$optimized_param$timesteps)
+
+
+
+pre_gru <- predict(object = gru_mod2$optimized_mod, x = h.data.gru_val$x)
+
+
+me <- mean(p.data$data$discharge)
+std <- sd(p.data$data$discharge)
+pre_gru_unscaled <-  analyze_model(measured = p.data$data$discharge[valid],
+                                    modeled = pre_gru,
+                                    catchment = "Thur",
+                                    mod_type = "gru",
+                                    unscale = c(std,me))
+
+mon_mean <- monthly_mean(measured = p.data$data$discharge[valid],
+                         modeled = pre_gru_unscaled,
+                         date = p.data$date[valid])
+
+pdf(file = "../Results/Plots/Thur_GRU_monthly.pdf")
+monthly_plot(data = mon_mean,
+             main = "Thur GRU")
+dev.off()
+
+
+
+u_gru <- trans_back(pre_gru, min = min(p.data$data$discharge), max = max(p.data$data$discharge))
+wushu <- p.data$data$discharge[valid]
+wushu <- wushu[-(1:gru_mod2$optimized_param$timesteps-1)]
+rmse(wushu,u_gru) # 2040 *50.3518+46.78827  2020 *60.357+65.206 [9142:14610]
+
+maxy <- max(u_gru,wushu)
+miny <- min(u_gru-wushu)
+plot(wushu, type = "l", col = "blue", ylim = c(miny*1.1,maxy*1.1))
+lines(u_gru, col = "green")
+lines(u_gru-wushu, col = "red")
 abline(h=0)
-legend("topright", legend = c("model", "data", "model - data"), bty = "n", 
-       lty = 1, col = c("darkgreen", "blue", "red"))
 
-mean(plgbm)
-mean(p.data$data$discharge[valid])
-NSE(sim = as.matrix(plgbm), obs = as.matrix(p.data$data$discharge[valid]))
-KGE(sim = as.matrix(plgbm), obs = as.matrix(p.data$data$discharge[valid]))
+mean(u_gru)
+mean(wushu)
+NSE(sim = as.matrix(u_gru), obs = as.matrix(wushu))
+KGE(sim = as.matrix(u_gru), obs = as.matrix(wushu))
 
 
-lgb.plot.importance(lgb.importance(model=lgbm_mod$optimized_mod),top_n = 15)
-
-test <- monthly_mean(measured = p.data$data$discharge[valid],
-                     modeled = plgbm,
-                     date = p.data$date[valid])
 
 
-monthly_plot(test)
+
+
+
+
+h.mean <- lapply(p.data$data, FUN = "mean",2, na.rm = TRUE)
+h.sd <- lapply(p.data$data, FUN = "sd",2)
+h.data.scale <- scale(p.data$data, center = TRUE)
+calib.data <- h.data.scale[calib,]
+
+nn_mod2 <- bayes_opt_NN(x = h.data.scale[calib,-1], 
+                            y = h.data.scale[calib,1], 
+                            epochs_opt = 3, 
+                            initPoints = 6
+                            # , duplicate = c("max", 0.9,1)
+                          )
+nn_mod2$bayes_summary
+
+nn_thur <- nn_mod2
+save(nn_thur, file = "../Results/Models/Thur_NN.RData")
+
+
+
+pre_nn <- predict(object = nn_mod2$optimized_mod, x = h.data.scale[valid,-1])
+
+
+me <- mean(p.data$data$discharge)
+std <- sd(p.data$data$discharge)
+pre_nn_unscaled <-  analyze_model(measured = p.data$data$discharge[valid],
+                                    modeled = pre_nn,
+                                    catchment = "Thur",
+                                    mod_type = "nn",
+                                    unscale = c(std,me))
+
+mon_mean <- monthly_mean(measured = p.data$data$discharge[valid],
+                         modeled = pre_nn_unscaled,
+                         date = p.data$date[valid])
+
+pdf(file = "../Results/Plots/Thur_NN_monthly.pdf")
+monthly_plot(data = mon_mean,
+             main = "Thur NN")
+dev.off()
