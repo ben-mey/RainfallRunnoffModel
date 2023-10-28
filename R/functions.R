@@ -157,8 +157,8 @@ dataPrepLSTM <- function(x,
     
     #append the previously selected data n times to the original data.
     for (t in 1:duplicate[3]) {
-      yPrep <- rbind(yPrep,addy)
-      xPrep <- abind::abind(xPrep,addx, along = 1)
+      yPrep <- rbind(addy, yPrep)
+      xPrep <- abind::abind(addx, xPrep, along = 1)
     }
     return(list(x=xPrep, y=yPrep))
     
@@ -295,10 +295,10 @@ optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, 
 
 
 ################################################
-# normalize input data for NN,LSTM, and GRU model inputs
+# normalize input data for MLP,LSTM, and GRU model inputs
 ################################################
 
-# to normalize the input data for NN,LSTM, and GRU
+# to normalize the input data for MLP,LSTM, and GRU
 
 
 normalize <- function(x) {
@@ -630,11 +630,11 @@ bayes_opt_LSTM <- function(x,
                          dropout = c(0,0.4),
                          batchsize = c(5L,100L),
                          timesteps = c(5L,100L),
-                         epochs_opt = 15,
                          epochs_lstm = 100,
                          earlystop = 8,
                          validation_split = 0.25,
                          initPoints = 20,
+                         epochs_opt = 15,
                          duplicate = FALSE){
   
   time1 <- as.numeric(Sys.time())
@@ -808,11 +808,11 @@ bayes_opt_GRU <- function(x,
                            dropout = c(0,0.4),
                            batchsize = c(5L,100L),
                            timesteps = c(5L,100L),
-                           epochs_opt = 15,
                            epochs_gru = 100,
                            earlystop = 8,
                            validation_split = 0.25,
                            initPoints = 20,
+                           epochs_opt = 15,
                            duplicate = FALSE){
   
   time1 <- as.numeric(Sys.time())
@@ -907,7 +907,7 @@ bayes_opt_GRU <- function(x,
 
 
 ########################################
-# Function to create custom NN models
+# Function to create custom MLP models
 ########################################
 
 # This function is mainly used in the Bayesian optimization for GRU models
@@ -920,18 +920,18 @@ bayes_opt_GRU <- function(x,
 # @ timesteps:  time step size of the input data
 # @ n_features: number of features used (x variables)
 
-create_NN <- function(layers, 
+create_MLP <- function(layers, 
                       units, 
                       dropout,
                       n_features,
-                      activation = "softmax"){
+                      activation = "softplus"){
   
   
   input <- layer_input(shape = n_features)
   for(lay in 1:layers){
     # return sequences on for all except for last layer
     
-    # add a NN layer
+    # add a MLP layer
     if(lay == 1) {
       output <- input %>% layer_dense(units = units,
                                     activation = activation)
@@ -954,9 +954,9 @@ create_NN <- function(layers,
 # Bayesian optimization for neural network Models
 #############################################
 
-# Implementation of Bayesian hyper parameter optimization for NN.
-# Take care: optimization can take quite long. On my machine (GTX 3070) a run with default parameters takes
-# between 1 and 3 hours (depends on how complex the optimal model is).
+# Implementation of Bayesian hyper parameter optimization for MLP.
+# Optimization can take quite some time. On my machine (GTX 3070) a run with default parameters takes
+# between 20 and 30 minutes (depends on how complex the optimal model is).
 # Returns a list with the optimized hyper parameter, the optimized model, and a summary of the Bayesian optimization.
 
 
@@ -975,35 +975,35 @@ create_NN <- function(layers,
 # @ duplicate:  vector giving info about duplication of min or max values for training: c(mode, proportion, times) 
 #               ex.: c(max,0.9,1); c(min,0.1,1) adds the highest/lowest 10% of the values 1 time
 
-bayes_opt_NN <- function(x, 
-                         y, 
-                         layers = c(1L,5L), 
-                         units = c(5L,150L),
-                         dropout = c(0,0.4),
-                         batchsize = c(5L,100L),
-                         epochs_opt = 15,
-                         epochs_nn = 100,
-                         earlystop = 8,
-                         validation_split = 0.25,
-                         initPoints = 20,
-                         duplicate = FALSE,
-                         activation = "softmax"){
+bayes_opt_MLP <- function(x, 
+                          y, 
+                          layers = c(1L,5L), 
+                          units = c(5L,150L),
+                          dropout = c(0,0.4),
+                          batchsize = c(5L,100L),
+                          epochs_mlp = 100,
+                          earlystop = 8,
+                          validation_split = 0.25,
+                          initPoints = 25,
+                          epochs_opt = 15,
+                          duplicate = FALSE,
+                          activation = "softmax"){
   
   time1 <- as.numeric(Sys.time())
   
   obj_func <- function(layers, units, dropout, batchsize) { 
     
     
-    mod.nn <- create_NN(layers = layers, 
+    mod.mlp <- create_MLP(layers = layers, 
                         units = units,
                         dropout = dropout,
                         n_features = dim(x)[2],
                         activation = activation)
     
-    history_nn <- fit(object = mod.nn, 
+    history_mlp <- fit(object = mod.mlp, 
                         x=x, 
                         y=y,
-                        epochs = epochs_nn, 
+                        epochs = epochs_mlp, 
                         verbose = 0, 
                         shuffle = TRUE, 
                         batch_size = batchsize,
@@ -1017,7 +1017,7 @@ bayes_opt_NN <- function(x,
       
       # First argument must be named as "Score"
       # Function finds maxima so inverting the output
-      Score = -min(history_nn$metrics$val_loss))
+      Score = -min(history_mlp$metrics$val_loss))
     
     return(lst)
   }
@@ -1040,19 +1040,19 @@ bayes_opt_NN <- function(x,
   
   
   
-  # create a optimized nn model
+  # create a optimized mlp model
   
-  opt_mdl <- create_NN(layers = opt_params$layers, 
+  opt_mdl <- create_MLP(layers = opt_params$layers, 
                         units = opt_params$units,
                         dropout = opt_params$dropout,
                         n_features = dim(x)[2])
   
   
-  # Fit a nn model
-  opt_history_nn <- fit(object = opt_mdl, 
+  # Fit a mlp model
+  opt_history_mlp <- fit(object = opt_mdl, 
                          x=x, 
                          y=y,
-                         epochs = epochs_nn, 
+                         epochs = epochs_mlp, 
                          verbose = 0, 
                          shuffle = FALSE, 
                          batch_size = opt_params$batchsize,
@@ -1062,7 +1062,7 @@ bayes_opt_NN <- function(x,
                                                    mode = "min", monitor = "val_loss")))
   
   output_list <- list(optimized_param = data.frame(getBestPars(bayes_out)),
-                      optimized_history = opt_history_nn,
+                      optimized_history = opt_history_mlp,
                       optimized_mod = opt_mdl,
                       bayes_summary = bayes_out$scoreSummary)
   
@@ -1157,7 +1157,7 @@ monthly_plot <- function(data, main="Titel"){
 # @ modeled:      vector with modeled data.
 # @ catchment:    string with catchment name. Used to generate the plot titels and save names.
 # @ unscale:      vector giving the standard deviation and mean used to transform the LSTM output back: c(std,mean)
-# @ mod_type:     String with model name. Use one of the exact strings: "xgb", "lstm", "lgbm", "gru", "nn"
+# @ mod_type:     String with model name. Use one of the exact strings: "xgb", "lstm", "lgbm", "gru", "mlp"
 # @ model:        model if model type is xgb or lgbm
 
 analyze_model <- function(measured, 
@@ -1171,10 +1171,10 @@ analyze_model <- function(measured,
     rmse <- round(sqrt(mean((modeled-measured)^2)), digits = 2)
     mod_mean <- round(mean(modeled), digits = 2)
     measured_mean <- round(mean(measured), digits = 2)
-    mod_top10 <- round(quantile(x = modeled, probs = 0.9), digits = 2)
-    measured_top10 <- round(quantile(x = measured, probs = 0.9), digits = 2)
-    mod_low10 <- round(quantile(x = modeled, probs = 0.1), digits = 2)
-    measured_low10 <- round(quantile(x = measured, probs = 0.1), digits = 2)
+    mod_top5 <- round(quantile(x = modeled, probs = 0.95), digits = 2)
+    measured_top5 <- round(quantile(x = measured, probs = 0.95), digits = 2)
+    mod_low5 <- round(quantile(x = modeled, probs = 0.05), digits = 2)
+    measured_low5 <- round(quantile(x = measured, probs = 0.05), digits = 2)
     mod_nse <- round(NSE(sim = as.matrix(modeled), obs = as.matrix(measured)), digits = 3)
     mod_kge <- round(KGE(sim = as.matrix(modeled), obs = as.matrix(measured)),digits = 3)
     
@@ -1206,10 +1206,10 @@ analyze_model <- function(measured,
     rmse <- round(sqrt(mean((modeled-measured)^2)), digits = 2)
     mod_mean <- round(mean(modeled), digits = 2)
     measured_mean <- round(mean(measured), digits = 2)
-    mod_top10 <- round(quantile(x = modeled, probs = 0.9), digits = 2)
-    measured_top10 <- round(quantile(x = measured, probs = 0.9), digits = 2)
-    mod_low10 <- round(quantile(x = modeled, probs = 0.1), digits = 2)
-    measured_low10 <- round(quantile(x = measured, probs = 0.1), digits = 2)
+    mod_top5 <- round(quantile(x = modeled, probs = 0.95), digits = 2)
+    measured_top5 <- round(quantile(x = measured, probs = 0.95), digits = 2)
+    mod_low5 <- round(quantile(x = modeled, probs = 0.05), digits = 2)
+    measured_low5 <- round(quantile(x = measured, probs = 0.05), digits = 2)
     mod_nse <- round(NSE(sim = as.matrix(modeled), obs = as.matrix(measured)), digits = 3)
     mod_kge <- round(KGE(sim = as.matrix(modeled), obs = as.matrix(measured)),digits = 3)
     
@@ -1250,10 +1250,10 @@ analyze_model <- function(measured,
     rmse <- round(sqrt(mean((modeled-measured)^2)), digits = 2)
     mod_mean <- round(mean(modeled), digits = 2)
     measured_mean <- round(mean(measured), digits = 2)
-    mod_top10 <- round(quantile(x = modeled, probs = 0.9), digits = 2)
-    measured_top10 <- round(quantile(x = measured, probs = 0.9), digits = 2)
-    mod_low10 <- round(quantile(x = modeled, probs = 0.1), digits = 2)
-    measured_low10 <- round(quantile(x = measured, probs = 0.1), digits = 2)
+    mod_top5 <- round(quantile(x = modeled, probs = 0.95), digits = 2)
+    measured_top5 <- round(quantile(x = measured, probs = 0.95), digits = 2)
+    mod_low5 <- round(quantile(x = modeled, probs = 0.05), digits = 2)
+    measured_low5 <- round(quantile(x = measured, probs = 0.05), digits = 2)
     mod_nse <- round(NSE(sim = as.matrix(modeled), obs = as.matrix(measured)), digits = 3)
     mod_kge <- round(KGE(sim = as.matrix(modeled), obs = as.matrix(measured)),digits = 3)
     
@@ -1274,7 +1274,6 @@ analyze_model <- function(measured,
     legend("topright", legend = c("model", "data", "model - data"), bty = "n", 
            lty = 1, col = c("chartreuse4", "blue", "red"))
     dev.off()
-    return(modeled)
   }
   
   if(mod_type=="gru") {
@@ -1290,10 +1289,10 @@ analyze_model <- function(measured,
     rmse <- round(sqrt(mean((modeled-measured)^2)), digits = 2)
     mod_mean <- round(mean(modeled), digits = 2)
     measured_mean <- round(mean(measured), digits = 2)
-    mod_top10 <- round(quantile(x = modeled, probs = 0.9), digits = 2)
-    measured_top10 <- round(quantile(x = measured, probs = 0.9), digits = 2)
-    mod_low10 <- round(quantile(x = modeled, probs = 0.1), digits = 2)
-    measured_low10 <- round(quantile(x = measured, probs = 0.1), digits = 2)
+    mod_top5 <- round(quantile(x = modeled, probs = 0.95), digits = 2)
+    measured_top5 <- round(quantile(x = measured, probs = 0.95), digits = 2)
+    mod_low5 <- round(quantile(x = modeled, probs = 0.05), digits = 2)
+    measured_low5 <- round(quantile(x = measured, probs = 0.05), digits = 2)
     mod_nse <- round(NSE(sim = as.matrix(modeled), obs = as.matrix(measured)), digits = 3)
     mod_kge <- round(KGE(sim = as.matrix(modeled), obs = as.matrix(measured)),digits = 3)
     
@@ -1314,10 +1313,9 @@ analyze_model <- function(measured,
     legend("topright", legend = c("model", "data", "model - data"), bty = "n", 
            lty = 1, col = c("chartreuse4", "blue", "red"))
     dev.off()
-    return(modeled)
   }
   
-  if(mod_type=="nn") {
+  if(mod_type=="mlp") {
     
     # transform the modeled data back
     modeled <- modeled*unscale[1]+unscale[2]
@@ -1326,10 +1324,10 @@ analyze_model <- function(measured,
     rmse <- round(sqrt(mean((modeled-measured)^2)), digits = 2)
     mod_mean <- round(mean(modeled), digits = 2)
     measured_mean <- round(mean(measured), digits = 2)
-    mod_top10 <- round(quantile(x = modeled, probs = 0.9), digits = 2)
-    measured_top10 <- round(quantile(x = measured, probs = 0.9), digits = 2)
-    mod_low10 <- round(quantile(x = modeled, probs = 0.1), digits = 2)
-    measured_low10 <- round(quantile(x = measured, probs = 0.1), digits = 2)
+    mod_top5 <- round(quantile(x = modeled, probs = 0.95), digits = 2)
+    measured_top5 <- round(quantile(x = measured, probs = 0.95), digits = 2)
+    mod_low5 <- round(quantile(x = modeled, probs = 0.05), digits = 2)
+    measured_low5 <- round(quantile(x = measured, probs = 0.05), digits = 2)
     mod_nse <- round(NSE(sim = as.matrix(modeled), obs = as.matrix(measured)), digits = 3)
     mod_kge <- round(KGE(sim = as.matrix(modeled), obs = as.matrix(measured)),digits = 3)
     
@@ -1337,11 +1335,11 @@ analyze_model <- function(measured,
     maxy <- max(measured,modeled)*1.1
     miny <- min(modeled-measured)*1.1
     
-    path1 <- paste("../Results/Plots/", catchment, "_NN_ts.pdf", sep = "")
+    path1 <- paste("../Results/Plots/", catchment, "_MLP_ts.pdf", sep = "")
     
     pdf(file = path1, width = 14, height = 7)
     plot(measured, type = "l", col="blue", ylim = c(miny,maxy), 
-         main = paste(catchment, "NN"), ylab = "Discharge")
+         main = paste(catchment, "MLP"), ylab = "Discharge")
     lines(modeled, col="chartreuse4")
     lines(modeled-measured, col="red")
     abline(h=0)
@@ -1350,7 +1348,6 @@ analyze_model <- function(measured,
     legend("topright", legend = c("model", "data", "model - data"), bty = "n", 
            lty = 1, col = c("chartreuse4", "blue", "red"))
     dev.off()
-    return(modeled)
   }
   
   cat("\n",catchment, ";",
@@ -1360,14 +1357,17 @@ analyze_model <- function(measured,
       mod_kge, ";",
       mod_mean, ";",
       measured_mean, ";",
-      mod_top10, ";",
-      measured_top10, ";",
-      mod_low10, ";",
-      measured_low10, 
+      mod_top5, ";",
+      measured_top5, ";",
+      mod_low5, ";",
+      measured_low5, 
       file = "../Results/Models/model_stat.txt",
       append = TRUE,
       sep = "")
   
+  if (mod_type == "lstm" | mod_type == "gru" | mod_type == "mlp") {
+    return(modeled)
+  }
 }
 
 

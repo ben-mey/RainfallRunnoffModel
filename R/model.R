@@ -939,11 +939,12 @@ h.data.scale.mm <- normalize(p.data$data)
 
 
 
-gru_mod2 <- bayes_opt_NN(x = h.data.scale.[calib,-1], 
-                            y = h.data.scale.[calib,1], 
+gru_mod2 <- bayes_opt_GRU(x = h.data.scale.mm[calib,-1], 
+                            y = h.data.scale.mm[calib,1], 
                             epochs_opt = 2, 
                             initPoints = 6
-                            # , duplicate = c("max", 0.9,1)
+                            , duplicate = c("max", 0.9,1)
+                            , validation_split = 0.8
                         )
 gru_mod2$bayes_summary
 
@@ -977,11 +978,10 @@ monthly_plot(data = mon_mean,
 dev.off()
 
 
-
 u_gru <- trans_back(pre_gru, min = min(p.data$data$discharge), max = max(p.data$data$discharge))
 wushu <- p.data$data$discharge[valid]
 wushu <- wushu[-(1:gru_mod2$optimized_param$timesteps-1)]
-rmse(wushu,u_gru) # 2040 *50.3518+46.78827  2020 *60.357+65.206 [9142:14610]
+rmse(wushu,u_gru) 
 
 maxy <- max(u_gru,wushu)
 miny <- min(u_gru-wushu)
@@ -1005,37 +1005,49 @@ KGE(sim = as.matrix(u_gru), obs = as.matrix(wushu))
 h.mean <- lapply(p.data$data, FUN = "mean",2, na.rm = TRUE)
 h.sd <- lapply(p.data$data, FUN = "sd",2)
 h.data.scale <- scale(p.data$data, center = TRUE)
-calib.data <- h.data.scale[calib,]
 
-nn_mod2 <- bayes_opt_NN(x = h.data.scale[calib,-1], 
-                            y = h.data.scale[calib,1], 
-                            epochs_opt = 3, 
-                            initPoints = 6
-                            # , duplicate = c("max", 0.9,1)
+h.calib <- h.data.scale[calib,]
+filt.max <- h.calib[,1] > quantile(x = h.calib[,1], probs = 0.95)
+filt.min <- h.calib[,1] < quantile(x = h.calib[,1], probs = 0.15)
+add.max <- h.calib[filt.max,]
+add.min <- h.calib[filt.min,]
+for (t in 1:1) {
+  h.calib <- rbind(add.max, h.calib)
+  h.calib <- rbind(add.min, h.calib)
+}
+
+
+
+mlp_mod2 <- bayes_opt_MLP(x = h.calib[,-1], 
+                          y = h.calib[,1] 
+                          ,epochs_opt = 3, 
+                          initPoints = 6
+                          , validation_split = 0.8
                           )
-nn_mod2$bayes_summary
+mlp_mod2$bayes_summary
 
-nn_thur <- nn_mod2
-save(nn_thur, file = "../Results/Models/Thur_NN.RData")
+mlp_thur <- mlp_mod2
+save(mlp_thur, file = "../Results/Models/Thur_MLP.RData")
 
 
 
-pre_nn <- predict(object = nn_mod2$optimized_mod, x = h.data.scale[valid,-1])
+pre_mlp <- predict(object = mlp_mod2$optimized_mod, x = h.data.scale[valid,-1])
 
 
 me <- mean(p.data$data$discharge)
 std <- sd(p.data$data$discharge)
 pre_nn_unscaled <-  analyze_model(measured = p.data$data$discharge[valid],
-                                    modeled = pre_nn,
+                                    modeled = pre_mlp,
                                     catchment = "Thur",
-                                    mod_type = "nn",
+                                    mod_type = "mlp",
                                     unscale = c(std,me))
 
 mon_mean <- monthly_mean(measured = p.data$data$discharge[valid],
                          modeled = pre_nn_unscaled,
                          date = p.data$date[valid])
 
-pdf(file = "../Results/Plots/Thur_NN_monthly.pdf")
+pdf(file = "../Results/Plots/Thur_MLP_monthly.pdf")
 monthly_plot(data = mon_mean,
-             main = "Thur NN")
+             main = "Thur MLP")
 dev.off()
+
