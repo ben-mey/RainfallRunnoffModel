@@ -262,6 +262,11 @@ xgb.plot.shap.summary(data=as.matrix(h.data[calib.h,-c(1,2)]), model=xgb_mod1)
 
 
 
+
+###########################
+
+
+
 calib.h <- 60:9132
 valid.h <- 9133:14610
 
@@ -290,31 +295,7 @@ history_lstm <- fit(object = lstm_mod, x=h.data.lstm[,,-1], y=h.data.lstm[,,1],
                       callback_early_stopping(patience = 10, restore_best_weights = TRUE, 
                                               mode = "min", monitor = "val_loss")
                     ))
-### 2044
-# 5-47-1.1422
-# 10-26-0.1445
-# 40-16-0.1595
-# 5:5-28-0.1675
-# 5:10-25-0.1619
-# 5:20-40-0.1289
-# 5:40-30-0.1445
-# 10:5-30-0.1660
-# 10:10-15-0.1707
-# 10:20-25-0.1365
-# 10:40-19_0.1406
-# 20:5-25-0.1450
-# 20:10-24-0.1411
-# 20:20-27-0.1341 
-# 40:5-15-0.1534
-# 40:10-10-0.1527
-# 40:20-20-0.1305
-# 40:40-14-0.1395
-# 5:5:5-40-0.1374
-# 10:10:10-40-0.1371
-# 20:20:20-8-0.1465
-# 40:40:40-12-0.125 very fast over fitting around 0.14
-# 5:20:5-20-0.16
-# 5:10:5-28.0.18
+
 
 
 pre_lstm <- predict(object = lstm_mod, x = h.data.lstm_val[,,-1])
@@ -335,6 +316,14 @@ mean(h.data$discharge_vol.m3.s.[9142:14610])
 NSE(sim = as.matrix(pre_lstm*std+me), obs = as.matrix(h.data$discharge_vol.m3.s.[9142:14610]))
 KGE(sim = as.matrix(pre_lstm*std+me), obs = as.matrix(h.data$discharge_vol.m3.s.[9142:14610]))
 
+
+
+
+##################################
+
+
+
+
 nn_mod <- keras_model_sequential() %>%
   #  layer_flatten(input_shape = c(370,4)) %>%
   layer_dense(units = 30, activation = "relu") %>%
@@ -353,288 +342,6 @@ NSE(sim = as.matrix(pre_nn*std+me), obs = as.matrix(h.data$discharge_vol.m3.s.[v
 KGE(sim = as.matrix(pre_nn*std+me), obs = as.matrix(h.data$discharge_vol.m3.s.[valid.h]))
 
 
-
-#########################
-#########################
-
-
-
-maxdepth <- 3:8
-nrounds <- c(5,10,20,40,60,80.100,130,150)
-# nrounds <- 150:170
-eta <- seq(0.025,0.2,0.025)
-k <- 0
-numNA <- length(maxdepth)*length(nrounds)*length(eta)
-rmse <- rep(NA, numNA)
-s_maxdepth <- rep(NA, numNA)
-s_nrounds <- rep(NA, numNA)
-s_eta <- rep(NA, numNA)
-s_gam <- rep(NA, numNA)
-
-
-for (i in maxdepth) {
-  for (j in nrounds) {
-    for (e in 1:length(eta)) {
-      
-      k <- k+1
-      
-      xgb_mod <- xgboost(data = as.matrix(h.data[calib.h,3:27]), label = h.data$discharge_vol.m3.s.[calib.h],
-                         max.depth = i, eta = eta[e], nrounds = j, nthread = 20, objective = "reg:squarederror", 
-                         weight = h.weights.min[calib.h])
-      pre_xgb <- predict(object = xgb_mod, newdata = as.matrix(h.data[valid.h,3:27]))
-      
-      
-      rmse[k] <- sqrt(mean((pre_xgb-h.data[valid.h,2])^2))
-      s_maxdepth[k] <- i
-      s_nrounds[k] <- j
-      s_eta[k] <- eta[e]
-      
-    }
-  }
-}
-
-best <- which(min(rmse, na.rm = TRUE)==rmse)
-rmse[best]
-s_maxdepth[best]
-s_nrounds[best]
-s_eta[best]
-# 2020 23.23/22.06 5/4 150/150 0.15/0.15
-# 2044  7/5 150 0.125/0.175
-
-
-
-
-xgb_modmax <- xgboost(data = as.matrix(h.data[calib.h,3:27]), label = h.data$discharge_vol.m3.s.[calib.h],
-                    max.depth = 7, eta = 0.125, nrounds = 150, nthread = 16, objective = "reg:squarederror", 
-                    weight = h.weights.max[calib.h])
-pxgbmax <- predict(object = xgb_modmax, newdata = as.matrix(h.data[-c(1:59),3:27]))
-
-xgb_modmin <- xgboost(data = as.matrix(h.data[calib.h,3:27]), label = h.data$discharge_vol.m3.s.[calib.h],
-                      max.depth = 4, eta = 0.15, nrounds = 150, nthread = 16, objective = "reg:squarederror", 
-                      weight = h.weights.min[calib.h])
-pxgbmin <- predict(object = xgb_modmin, newdata = as.matrix(h.data[-(1:59),3:27]))
-
-
-valid.hx <- 9074:14551
-
-maxy <- max(pxgbmax[valid.hx],h.data$discharge_vol.m3.s.[valid.h])*1.1
-miny <- min(pxgbmax[valid.hx]-h.data$discharge_vol.m3.s.[valid.h])*1.1
-plot(pxgbmax[valid.hx], type = "l", col="darkgreen", ylim = c(miny,maxy), main = "pxgbmax")
-lines(h.data$discharge_vol.m3.s.[valid.h], col="blue")
-lines(pxgbmax[valid.hx]-h.data$discharge_vol.m3.s.[valid.h], col="red")
-abline(h=0)
-legend("topright", legend = c("model", "data", "model - data"), bty = "n", 
-       lty = 1, col = c("darkgreen", "blue", "red"))
-
-maxy <- max(pxgbmin[valid.hx],h.data$discharge_vol.m3.s.[valid.h])*1.1
-miny <- min(pxgbmin[valid.hx]-h.data$discharge_vol.m3.s.[valid.h])*1.1
-plot(pxgbmin[valid.hx], type = "l", col="darkgreen", ylim = c(miny,maxy), main = "pxgbmin")
-lines(h.data$discharge_vol.m3.s.[valid.h], col="blue")
-lines(pxgbmin[valid.hx]-h.data$discharge_vol.m3.s.[valid.h], col="red")
-abline(h=0)
-legend("topright", legend = c("model", "data", "model - data"), bty = "n", 
-       lty = 1, col = c("darkgreen", "blue", "red"))
-
-mean(pxgbmax[valid.hx])
-mean(h.data$discharge_vol.m3.s.[valid.h])
-rmse(h.data$discharge_vol.m3.s.[valid.h],pxgbmax[valid.hx])
-NSE(sim = as.matrix(pxgbmax[valid.hx]), obs = as.matrix(h.data$discharge_vol.m3.s.[valid.h]))
-KGE(sim = as.matrix(pxgbmax[valid.hx]), obs = as.matrix(h.data$discharge_vol.m3.s.[valid.h]))
-
-mean(pxgbmin[valid.hx])
-mean(h.data$discharge_vol.m3.s.[valid.h])
-rmse(h.data$discharge_vol.m3.s.[valid.h],pxgbmin[valid.hx])
-NSE(sim = as.matrix(pxgbmin[valid.hx]), obs = as.matrix(h.data$discharge_vol.m3.s.[valid.h]))
-KGE(sim = as.matrix(pxgbmin[valid.hx]), obs = as.matrix(h.data$discharge_vol.m3.s.[valid.h]))
-
-xgb.plot.importance(xgb.importance(model=xgb_modmax))
-xgb.plot.importance(xgb.importance(model=xgb_modmin))
-xgb.plot.multi.trees(xgb_modmax)
-xgb.plot.multi.trees(xgb_modmin)
-
-
-h.data$q_sim_max <- NA
-h.data$q_sim_min <- NA
-h.data$q_sim_max[-c(1:59)] <- pxgbmax
-h.data$q_sim_min[-c(1:59)] <- pxgbmin
-
-test_minmax <- rep(NA, length(pxgbmax))
-test_minmax[pxgbmax>80] <- pxgbmax[pxgbmax>80]
-test_minmax[is.na(test_minmax)] <- pxgbmin[is.na(test_minmax)]
-test2_minmax <- (pxgbmax+pxgbmin)/2
-mean(test_minmax[valid.hx])
-mean(test2_minmax[valid.hx])
-mean(h.data$discharge_vol.m3.s.[valid.h])
-rmse(h.data$discharge_vol.m3.s.[valid.h],test_minmax[valid.hx])
-rmse(h.data$discharge_vol.m3.s.[valid.h],test2_minmax[valid.hx])
-NSE(sim = as.matrix(test_minmax[valid.hx]), obs = as.matrix(h.data$discharge_vol.m3.s.[valid.h]))
-NSE(sim = as.matrix(test2_minmax[valid.hx]), obs = as.matrix(h.data$discharge_vol.m3.s.[valid.h]))
-KGE(sim = as.matrix(test_minmax[valid.hx]), obs = as.matrix(h.data$discharge_vol.m3.s.[valid.h]))
-KGE(sim = as.matrix(test2_minmax[valid.hx]), obs = as.matrix(h.data$discharge_vol.m3.s.[valid.h]))
-
-maxy <- max(test_minmax[valid.hx],h.data$discharge_vol.m3.s.[valid.h])*1.1
-miny <- min(test_minmax[valid.hx]-h.data$discharge_vol.m3.s.[valid.h])*1.1
-plot(test_minmax[valid.hx], type = "l", col="darkgreen", ylim = c(miny,maxy), main = "minmax")
-lines(h.data$discharge_vol.m3.s.[valid.h], col="blue")
-lines(test_minmax[valid.hx]-h.data$discharge_vol.m3.s.[valid.h], col="red")
-abline(h=0)
-legend("topright", legend = c("model", "data", "model - data"), bty = "n", 
-       lty = 1, col = c("darkgreen", "blue", "red"))
-
-maxy <- max(test2_minmax[valid.hx],h.data$discharge_vol.m3.s.[valid.h])*1.1
-miny <- min(test2_minmax[valid.hx]-h.data$discharge_vol.m3.s.[valid.h])*1.1
-plot(test2_minmax[valid.hx], type = "l", col="darkgreen", ylim = c(miny,maxy), main = "minmax2")
-lines(h.data$discharge_vol.m3.s.[valid.h], col="blue")
-lines(test2_minmax[valid.hx]-h.data$discharge_vol.m3.s.[valid.h], col="red")
-abline(h=0)
-legend("topright", legend = c("model", "data", "model - data"), bty = "n", 
-       lty = 1, col = c("darkgreen", "blue", "red"))
-
-
-h.data.scale <- scale(h.data[,c(-1)], center = TRUE)
-
-nn_mod <- keras_model_sequential() %>%
-  #  layer_flatten(input_shape = c(370,4)) %>%
-  layer_dense(units = 20, activation ="relu") %>%
-  layer_dense(units = 20, activation = "softmax") %>%
-  layer_dense(units = 1)
-compile(nn_mod, optimizer = "rmsprop", loss = "mse", metrics = "acc")
-
-history_nn <- fit(object = nn_mod, x=h.data.scale[calib.h,-1], y=h.data.scale[calib.h,1],
-                  epochs = 30, verbose = 1, shuffle = FALSE, batch_size = 5,
-                  validation_split = 0.3)
-
-pre_nn <- predict(object = nn_mod, x = h.data.scale[valid.h,-1])
-
-rmse(h.data$discharge_vol.m3.s.[valid.h],pre_nn*50.3518+46.78827)
-NSE(sim = as.matrix(pre_nn*50.3518+46.78827), obs = as.matrix(h.data$discharge_vol.m3.s.[valid.h]))
-KGE(sim = as.matrix(pre_nn*50.3518+46.78827), obs = as.matrix(h.data$discharge_vol.m3.s.[valid.h]))
-
-h.data.lstm <- dataPrepLSTM(data = h.data.scale[calib.h,], lag = 10)
-h.data.lstm_val <- dataPrepLSTM(data = h.data.scale[valid.h,], lag = 10)
-h.weights.max.lstm <- dataPrepLSTM(data = data.frame(h.weights.max, h.weights.min), lag = 10)
-
-lstm_mod <- keras_model_sequential()
-lstm_mod <- layer_lstm(object = lstm_mod, units = 20, return_sequences = TRUE) %>% #, return_sequences = TRUE
-  # layer_dropout(rate = 0.1) %>%
-  # layer_lstm(units = 10, return_sequences = TRUE) %>%
-  layer_lstm(units = 20) %>%
-  layer_dense(units = 1)
-compile(lstm_mod, optimizer = "rmsprop", loss = "mse", metrics = "mse", sample_weight_mode = "temporal")
-
-
-
-history_lstm <- fit(object = lstm_mod, x=h.data.lstm[,,-1], y=h.data.lstm[,1,1],
-                    epochs = 40, verbose = 1, shuffle = FALSE, batch_size = 5,
-                    validation_split = 0.3, sample_weight = h.weights.max[calib.h])
-### 2044
-# 5-47-1.1422
-# 10-26-0.1445
-# 40-16-0.1595
-# 5:5-28-0.1675
-# 5:10-25-0.1619
-# 5:20-40-0.1289
-# 5:40-30-0.1445
-# 10:5-30-0.1660
-# 10:10-15-0.1707
-# 10:20-25-0.1365
-# 10:40-19_0.1406
-# 20:5-25-0.1450
-# 20:10-24-0.1411
-# 20:20-27-0.1341 
-# 40:5-15-0.1534
-# 40:10-10-0.1527
-# 40:20-20-0.1305
-# 40:40-14-0.1395
-# 5:5:5-40-0.1374
-# 10:10:10-40-0.1371
-# 20:20:20-8-0.1465
-# 40:40:40-12-0.125 very fast over fitting around 0.14
-# 5:20:5-20-0.16
-# 5:10:5-28.0.18
-
-pre_lstm <- predict(object = lstm_mod, x = h.data.lstm_val[,,-1])
-
-rmse(h.data$discharge_vol.m3.s.[9142:14610],pre_lstm*50.3518+46.78827)
-NSE(sim = as.matrix(pre_lstm*50.3518+46.78827), obs = as.matrix(h.data$discharge_vol.m3.s.[9142:14610]))
-KGE(sim = as.matrix(pre_lstm*50.3518+46.78827), obs = as.matrix(h.data$discharge_vol.m3.s.[9142:14610]))
-
-
-plot(h.data$discharge_vol.m3.s.[9142:14610], type = "l", col = "blue", ylim = c(-150,950))
-lines(pre_lstm*50.3518+46.78827, col = "green")
-lines(pre_lstm*50.3518+46.78827-h.data$discharge_vol.m3.s.[9142:14610], col = "red")
-abline(h=0)
-mean(pre_lstm*50.3518+46.78827)
-mean(h.data$discharge_vol.m3.s.[9142:14610])
-
-
-
-
-
-
-
-maxdepth <- 3:8
-nrounds <- c(5,10,20,40,60,80,100,130,150)
-
-eta <- seq(0.025,0.2,0.025)
-k <- 0
-numNA <- length(maxdepth)*length(nrounds)*length(eta)
-rmse <- rep(NA, numNA)
-s_maxdepth <- rep(NA, numNA)
-s_nrounds <- rep(NA, numNA)
-s_eta <- rep(NA, numNA)
-s_gam <- rep(NA, numNA)
-
-for (i in maxdepth) {
-  for (j in nrounds) {
-    for (e in 1:length(eta)) {
-      
-      k <- k+1
-      
-      xgb_mod <- xgboost(data = as.matrix(h.data.calib.min[,3:27]), label = h.data.calib.min$discharge_vol.m3.s.,
-                         max.depth = i, eta = eta[e], nrounds = j, nthread = 20,objective = "reg:squarederror")
-      pre_xgb <- predict(object = xgb_mod, newdata = as.matrix(h.data.valid.min[,3:27]))
-      
-      
-      rmse[k] <- sqrt(mean((pre_xgb-h.data.valid.min[,2])^2))
-      s_maxdepth[k] <- i
-      s_nrounds[k] <- j
-      s_eta[k] <- eta[e]
-      
-    }
-  }
-}
-
-best <- which(min(rmse, na.rm = TRUE)==rmse)
-rmse[best]
-s_maxdepth[best]
-s_nrounds[best]
-s_eta[best]
-
-xgb_mod1 <- xgboost(data = as.matrix(h.data.calib.min[,3:27]), label = h.data.calib.min$discharge_vol.m3.s.,
-                    max.depth = 3, eta = 0.05, nrounds = 130, nthread = 16, objective = "reg:squarederror")
-
-pxgb1 <- predict(object = xgb_mod1, newdata = as.matrix(h.data.valid.min[,3:27]))
-
-
-maxy <- max(pxgb1,h.data$discharge_vol.m3.s.[valid.h])*1.1
-miny <- min(pxgb1-h.data$discharge_vol.m3.s.[valid.h])*1.1
-plot(pxgb1, type = "l", col="darkgreen", ylim = c(miny,maxy), main = "main")
-lines(h.data$discharge_vol.m3.s.[valid.h], col="blue")
-lines(pxgb1-h.data$discharge_vol.m3.s.[valid.h], col="red")
-abline(h=0)
-legend("topright", legend = c("model", "data", "model - data"), bty = "n", 
-       lty = 1, col = c("darkgreen", "blue", "red"))
-
-mean(pxgb1)
-mean(h.data$discharge_vol.m3.s.[valid.h])
-NSE(sim = as.matrix(pxgb1), obs = as.matrix(h.data$discharge_vol.m3.s.[valid.h]))
-KGE(sim = as.matrix(pxgb1), obs = as.matrix(h.data$discharge_vol.m3.s.[valid.h]))
-
-xgb.plot.deepness(xgb_mod1)
-xgb.plot.importance(xgb.importance(model=xgb_mod1))
-xgb.plot.multi.trees(xgb_mod1)
-xgb.plot.shap.summary(data=as.matrix(h.data[calib.h,-c(1,2)]), model=xgb_mod1)
 
 
 
@@ -719,6 +426,12 @@ pre_xgb <- predict(object = xgb_mod, newdata = as.matrix(h.data[valid.h,3:27]))
 rmse[k] <- sqrt(mean((pre_xgb-highdata[valid.h])^2)) 
 
 
+
+
+######################
+
+
+
 source("functions.R")
 
 calib.h <- 61:13200
@@ -766,6 +479,8 @@ xgb.plot.multi.trees(test1[[1]])
 #############################################################
 #############################################################
 
+
+
 calib <- p.data$calib
 valid <- p.data$valid
 
@@ -780,7 +495,7 @@ xgb_mod <- bayes_opt_xgb(data = as.matrix(p.data$data[calib,-1]), label = p.data
 xgb_thur <- xgb_mod
 save(xgb_thur, file = "../Results/Models/Thur_XBoost.RData")
 
-pxgb1 <- predict(object = xgb_mod[[2]], newdata = as.matrix(p.data$data[valid,-1]))
+pxgb1 <- predict(object = xgb_thur[[2]], newdata = as.matrix(p.data$data[valid,-1]))
 
 analyze_model(measured = p.data$data$discharge[valid],
               modeled = pxgb1,
@@ -828,9 +543,10 @@ h.data.scale <- scale(p.data$data, center = TRUE)
 
 lstm_mod2 <- bayes_opt_LSTM(x = h.data.scale[calib,-1], 
                             y = h.data.scale[calib,1], 
-                            epochs_opt = 30, 
+                            epochs_opt = 15, 
                             initPoints = 25
-                            # , duplicate = c("max", 0.9,1)
+                            , duplicate = c(0.1, 0.9, 1)
+                            , validation_split = 0.8
                             )
 lstm_mod2$bayes_summary
 
@@ -889,9 +605,10 @@ summary(lstm_mod2$optimized_mod)
 lgbm_mod <- bayes_opt_lgb(data = as.matrix(p.data$data[calib,-1]), label = p.data$data[calib,1])
 
 lgb_thur <- lgbm_mod
-save(lgb_thur, file = "../Results/Models/Thur_LightGBM.RData")
+save(lgb_thur, file = "../Results/Models/Thur_LightGBM_mod.RData")
+saveRDS.lgb.Booster(lgb_thur$optimized_mod, file = "../Results/Models/Thur_LightGBM_mod.RData")
 
-plgbm <- predict(object = lgbm_mod$optimized_mod, data = as.matrix(p.data$data[valid,-1]))
+plgbm <- predict(object = lgb_thur$optimized_mod, data = as.matrix(p.data$data[valid,-1]))
 
 
 analyze_model(measured = p.data$data$discharge[valid],
@@ -939,11 +656,11 @@ h.data.scale.mm <- normalize(p.data$data)
 
 
 
-gru_mod2 <- bayes_opt_GRU(x = h.data.scale.mm[calib,-1], 
-                            y = h.data.scale.mm[calib,1], 
-                            epochs_opt = 2, 
-                            initPoints = 6
-                            , duplicate = c("max", 0.9,1)
+gru_mod2 <- bayes_opt_GRU(x = h.data.scale[calib,-1], 
+                            y = h.data.scale[calib,1], 
+                            epochs_opt = 15, 
+                            initPoints = 25
+                            , duplicate = c(0.1, 0.9,1)
                             , validation_split = 0.8
                         )
 gru_mod2$bayes_summary
@@ -951,8 +668,8 @@ gru_mod2$bayes_summary
 gru_thur <- gru_mod2
 save(gru_thur, file = "../Results/Models/Thur_GRU.RData")
 
-h.data.gru_val <- dataPrepLSTM(x = h.data.scale.mm[valid,-1], 
-                                y = h.data.scale.mm[valid,1], 
+h.data.gru_val <- dataPrepLSTM(x = h.data.scale[valid,-1], 
+                                y = h.data.scale[valid,1], 
                                 timesteps = gru_mod2$optimized_param$timesteps)
 
 
@@ -1007,8 +724,8 @@ h.sd <- lapply(p.data$data, FUN = "sd",2)
 h.data.scale <- scale(p.data$data, center = TRUE)
 
 h.calib <- h.data.scale[calib,]
-filt.max <- h.calib[,1] > quantile(x = h.calib[,1], probs = 0.95)
-filt.min <- h.calib[,1] < quantile(x = h.calib[,1], probs = 0.15)
+filt.max <- h.calib[,1] > quantile(x = h.calib[,1], probs = 0.99)
+filt.min <- h.calib[,1] < quantile(x = h.calib[,1], probs = 0.01)
 add.max <- h.calib[filt.max,]
 add.min <- h.calib[filt.min,]
 for (t in 1:1) {
@@ -1020,8 +737,8 @@ for (t in 1:1) {
 
 mlp_mod2 <- bayes_opt_MLP(x = h.calib[,-1], 
                           y = h.calib[,1] 
-                          ,epochs_opt = 3, 
-                          initPoints = 6
+                          ,epochs_opt = 10, 
+                          initPoints = 15
                           , validation_split = 0.8
                           )
 mlp_mod2$bayes_summary

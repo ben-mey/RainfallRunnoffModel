@@ -30,6 +30,7 @@ dataPrep <- function(data,
   
   colnames(data) <- c("date", "discharge", "precip", "temp")
  
+  # create various lags of precipitation
   data$lag1precip <- shift(x=data$precip,n=1, type= "lag")
   data$lag2precip <- shift(x=data$precip,n=2, type= "lag")
   data$lag3precip <- shift(x=data$precip,n=3, type= "lag")
@@ -38,6 +39,7 @@ dataPrep <- function(data,
   data$lag6precip <- shift(x=data$precip,n=6, type= "lag")
   data$lag7precip <- shift(x=data$precip,n=7, type= "lag")
   
+  # create various lags of temperature
   data$lag1temp <- shift(x=data$temp,n=1, type= "lag")
   data$lag2temp <- shift(x=data$temp,n=2, type= "lag")
   data$lag3temp <- shift(x=data$temp,n=3, type= "lag")
@@ -46,6 +48,7 @@ dataPrep <- function(data,
   data$lag6temp <- shift(x=data$temp,n=6, type= "lag")
   data$lag7temp <- shift(x=data$temp,n=7, type= "lag")
   
+  # create precipitation sum over various days
   data$sum2precip <- frollsum(x=data$precip, n= 2)
   data$sum3precip <- frollsum(x=data$precip, n= 3)
   data$sum4precip <- frollsum(x=data$precip, n= 4)
@@ -55,6 +58,7 @@ dataPrep <- function(data,
   data$sum15precip <- frollsum(x=data$precip, n= 15)
   data$sum30precip <- frollsum(x=data$precip, n= 30)
   
+  # create mean temperature over various timeframes and combined with lag
   data$mean3temp <- frollmean(x=data$temp, n=3, align = "right")
   data$mean7temp <- frollmean(x=data$temp, n=7, align = "right")
   data$mean30temp <- frollmean(x=data$temp, n=30, align = "right")
@@ -62,6 +66,7 @@ dataPrep <- function(data,
   data$mean30templag30 <- shift(x=data$mean30temp ,n=30, type= "lag")
   data$sum30precilag30 <- shift(x=data$sum30preci ,n=30, type= "lag")
   
+  # apply different a low / high pass filter to the discharge to be used when desired
   lh.filter <- as.data.frame(data$discharge)
   lh.filter$lowpass15 <- frollmean(x=data$discharge, n=15, align = "center")
   lh.filter$lowpass31 <- frollmean(x=data$discharge, n=31, align = "center")
@@ -74,12 +79,15 @@ dataPrep <- function(data,
   lh.filter$highpass61 <- data$discharge-lh.filter$lowpass61
   lh.filter$highpass121 <- data$discharge-lh.filter$lowpass121
   
+  # shorten all data in order to avoid leading / trailing NAs 
   data <- data[!is.na(lh.filter$lowpass121),]
   lh.filter <- lh.filter[!is.na(lh.filter$lowpass121),]
   
+  # get a vector containing the year information from the date to split the data in calibration/validation period
   dat <- strptime(data$date, format = dateformat)
   dat.y <- year(dat)
  
+  # create a vector where every third year is missing (used for validation later)
   skp <- 1
   count <- 0
   skipunreg <- NA
@@ -116,8 +124,8 @@ dataPrep <- function(data,
 # @ y:          vector with the target variable used in the LSTM. Data should be standard normalized.
 # @ timesteps:  number of time steps used in the LSTM
 # @ weights:    vector with the same length as y containing weights used in the LSTM
-# @ duplicate:  vector giving info about duplication of min or max values for training: c(mode, proportion, times) 
-#               ex.: c(max,0.9,1); c(min,0.1,1) adds the highest/lowest 10% of the values 1 time
+# @ duplicate:  vector giving info about duplication of min or max values for training: c(proportion min, proportion max, times) 
+#               ex.: c(0.1,0.9,1); adds the highest/lowest 10% of the values 1 time
 
 dataPrepLSTM <- function(x, 
                          y, 
@@ -125,6 +133,7 @@ dataPrepLSTM <- function(x,
                          timesteps=7,
                          duplicate = FALSE){
   
+  # create a consecutive lag of the discharge for each time step
   yPrep <- matrix(nrow = as.vector(length(y)), ncol = timesteps, data = NA)
   for(i in 1:timesteps){
     
@@ -132,11 +141,14 @@ dataPrepLSTM <- function(x,
   }
   yPrep <- yPrep[-(1:i-1),]
   
+  # creat a consecutive lag of the predictors for each time step
   dimen <- c(dim(x)[1]+1-timesteps, timesteps, dim(x)[2])
   xPrep <- array(dim=dimen,data = NA)
   for (i in 1:timesteps) {
     xPrep[,i,] <- as.matrix(x[(timesteps+1-i):(dim(x)[1]+1-i),])
   }
+  
+  # create a consecutive lag of the weights to match the discharge data if weights not set to FALSE
   if (weights[1]!=FALSE) {
     weightsPrep <- matrix(nrow = as.vector(length(y)), ncol = timesteps, data = NA)
     for(i in 1:timesteps){
@@ -146,19 +158,26 @@ dataPrepLSTM <- function(x,
     weightsPrep <- weightsPrep[-(1:i-1),]
     return(list(x=xPrep, y=yPrep, weights = weightsPrep))
   }
+  
+  # adds a proportion of the max min values in front of the data set if not  set to FALSE. 
+  # Validation in the training process uses always the last part of the data.
   else if (duplicate[1]!=FALSE) {
     # create logical vector depending on proportion of max / min values
-    if(duplicate[1]=="max"){add <- yPrep[,1]>quantile(x = yPrep, probs = as.numeric(duplicate[2]))}
-    if(duplicate[1]=="min"){add <- yPrep[,1]<quantile(x = yPrep, probs = as.numeric(duplicate[2]))}
+    add.max <- yPrep[,1]>quantile(x = yPrep, probs = as.numeric(duplicate[2]))
+    add.min <- yPrep[,1]<quantile(x = yPrep, probs = as.numeric(duplicate[1]))
     
     # select the y an d x data that should be duplicated
-    addy <- yPrep[add,]
-    addx <- xPrep[add,,]
+    addy.max <- yPrep[add.max,]
+    addy.min <- yPrep[add.min,]
+    addx.max <- xPrep[add.max,,]
+    addx.min <- xPrep[add.min,,]
     
     #append the previously selected data n times to the original data.
     for (t in 1:duplicate[3]) {
-      yPrep <- rbind(addy, yPrep)
-      xPrep <- abind::abind(addx, xPrep, along = 1)
+      yPrep <- rbind(addy.max, yPrep)
+      yPrep <- rbind(addy.min, yPrep)
+      xPrep <- abind::abind(addx.max, xPrep, along = 1)
+      xPrep <- abind::abind(addx.min, xPrep, along = 1)
     }
     return(list(x=xPrep, y=yPrep))
     
@@ -190,7 +209,7 @@ rmse <- function(x,y){
 # @ max_depth:  vector giving the max depth of the trees for the grid search optimization
 # @ eta:        vector giving the the learning rates used in the grid search optimization
 # @ nrounds:    vector giving the max depth of the trees for the initial grid search optimization
-# @ bt:         deprecated, legacy arg. Keep on FLASE
+# @ bt:         deprecated, legacy arg. Keep on FLASE (default). Too lazy to build fully back
 
 optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, eta = seq(0.025,0.2,0.025), 
                          nrounds = c(20,40,70,100,130,160,200), nthread = detectCores()-1, 
@@ -198,6 +217,7 @@ optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, 
   time1 <- as.numeric(Sys.time())
   if (bt[1] == 0) {
     
+    # set up vectors to save the used parameters and rmse
     k <- 0
     numNA <- length(max.depth)*length(nrounds)*length(eta)
     s_rmse <- rep(NA, numNA)
@@ -205,7 +225,7 @@ optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, 
     s_nrounds <- rep(NA, numNA)
     s_eta <- rep(NA, numNA)
     
-    
+    # iterate over all possible combinations of parameters values
     for (i in max.depth) {
       for (j in nrounds) {
         for (e in 1:length(eta)) {
@@ -227,6 +247,7 @@ optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, 
       }
     }
     
+    # get the best parameter combination
     best <- which(min(s_rmse, na.rm = TRUE)==s_rmse)
     
     rmse_opt <- s_rmse[best]
@@ -234,6 +255,7 @@ optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, 
     nrounds_opt <- s_nrounds[best]
     eta_opt <- s_eta[best]
     
+    # if with the best iteration nrounds is max, train a model with the best parameter set and return it
     if (nrounds_opt == tail(nrounds, n=1)) {
       
       xgb_opt <- xgboost(data = data, label = label, max.depth = maxdepth_opt, eta = eta_opt, 
@@ -244,6 +266,8 @@ optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, 
       
     }
     
+    # if the best value for nrounds is not the max, iterate between the neighbouring nround values
+    # and get the best value for nrounds 
     else{
       
       if (nrounds_opt == nrounds[1]) {
@@ -285,11 +309,15 @@ optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, 
     
   }
   
+  # print a warning if used
   if(bt[1]>0){
     print("Currently not implemented")
   }
+  # print the time needed for the optimization to complete
   print(paste("optimization completed in: ", as.numeric(Sys.time()-time1)%/%60, " minutes ",
               round(as.numeric(Sys.time()-time1)%%60, digits = 1), " seconds"))
+  
+  # return the optimized model and parameters
   return(opt_result)
 }
 
@@ -298,7 +326,8 @@ optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, 
 # normalize input data for MLP,LSTM, and GRU model inputs
 ################################################
 
-# to normalize the input data for MLP,LSTM, and GRU
+# to normalize the input data for MLP,LSTM, and GRU to be between 0 and 1
+# @ x a vector, data frame or matrix to be transformed column wise
 
 
 normalize <- function(x) {
@@ -306,6 +335,8 @@ normalize <- function(x) {
 }
 
 
+################################
+# transform a vector back, give the min & max of the untransformed data.
 
 trans_back <- function(x, min, max) {x * (max - min) + min}
 
@@ -578,6 +609,7 @@ create_LSTM <- function(layers, units, dropout,
     } else {
       return_sequences_flag <- FALSE
     }
+    
     # add a lstm layer
     if(lay == 1) {
       output <- input %>% layer_lstm(units = units,
@@ -589,6 +621,7 @@ create_LSTM <- function(layers, units, dropout,
                                      dropout = dropout)
     }
   }
+  
   output <- output %>% layer_dense(1)
   model <- keras_model(input, output) %>%
     keras::compile(loss = "mse",
@@ -608,20 +641,20 @@ create_LSTM <- function(layers, units, dropout,
 # Returns a list with the optimized hyper parameter, the optimized model, and a summary of the Bayesian optimization.
 
 
-# @ x:      predictor variables in a 2D format. Input data should be standard normalized. Creates the needed 3D format inside.
-# @ y:      target variable in a 1D format. Input data should be standard normalized. Creates the needed 2D format inside.
-# @
-# @
-# @
-# @
-# @
-# @
-# @
-# @
-# @
-# @
-# @ duplicate:  vector giving info about duplication of min or max values for training: c(mode, proportion, times) 
-#               ex.: c(max,0.9,1); c(min,0.1,1) adds the highest/lowest 10% of the values 1 time
+# @ x:                predictor variables in a 2D format. Input data should be standard normalized. Creates the needed 3D format inside.
+# @ y:                target variable in a 1D format. Input data should be standard normalized. Creates the needed 2D format inside.
+# @ layers:           vector giving the lower and upper bounds (integers) of optimization of number of layers
+# @ units:            vector giving the lower and upper bounds (integers) of optimization of number of units per layer
+# @ dropout:          vector giving the lower and upper bounds of optimization of the dropout rate
+# @ batchsize:        vector giving the lower and upper bounds (integers) of optimization of batch size
+# @ timesteps:        vector giving the lower and upper bounds (integers) of optimization of time steps
+# @ epochs_lstm:      integer giving the maximum epochs used to train the lstm models
+# @ earlystop:        integer giving number of epochs after which the training stops with no improvement (best epoch is saved)
+# @ validation_split: proportion of data used for training (0<p>1). e.x.: 0.8 means 80% of data for training, 20% of data for validation
+# @ epochs_opt:       number of optimization epochs during Bayesian optimization
+# @ initPoints:       number of initial points calculated for Bayesian optimization
+# @ duplicate:        vector giving info about duplication of min or max values for training: c(mode, proportion, times) 
+#                     ex.: c(max,0.9,1); c(min,0.1,1) adds the highest/lowest 10% of the values 1 time
 
 bayes_opt_LSTM <- function(x, 
                          y, 
@@ -737,8 +770,8 @@ bayes_opt_LSTM <- function(x,
 #  but can also be used to create GRU models outside of this.
 
 
-# @ layers:     number of layers of the GRU
-# @ units:      number of units per layer
+# @ layers:     integer giving the number of layers of the GRU
+# @ units:      integer giving the number of units per layer
 # @ dropout:    dropout rate
 # @ timesteps:  time step size of the input data
 # @ n_features: number of features used (x variables)
@@ -788,18 +821,18 @@ create_GRU <- function(layers, units, dropout,
 
 # @ x:      predictor variables in a 2D format. Input data should be standard normalized. Creates the needed 3D format inside.
 # @ y:      target variable in a 1D format. Input data should be standard normalized. Creates the needed 2D format inside.
-# @
-# @
-# @
-# @
-# @
-# @
-# @
-# @
-# @
-# @
-# @ duplicate:  vector giving info about duplication of min or max values for training: c(mode, proportion, times) 
-#               ex.: c(max,0.9,1); c(min,0.1,1) adds the highest/lowest 10% of the values 1 time
+# @ layers:           vector giving the lower and upper bounds (integers) of optimization of number of layers
+# @ units:            vector giving the lower and upper bounds (integers) of optimization of number of units per layer
+# @ dropout:          vector giving the lower and upper bounds of optimization of the dropout rate
+# @ batchsize:        vector giving the lower and upper bounds (integers) of optimization of batch size
+# @ timesteps:        vector giving the lower and upper bounds (integers) of optimization of time steps
+# @ epochs_gru:      integer giving the maximum epochs used to train the lstm models
+# @ earlystop:        integer giving number of epochs after which the training stops with no improvement (best epoch is saved)
+# @ validation_split: proportion of data used for training (0<p>1). e.x.: 0.8 means 80% of data for training, 20% of data for validation
+# @ epochs_opt:       number of optimization epochs during Bayesian optimization
+# @ initPoints:       number of initial points calculated for Bayesian optimization
+# @ duplicate:        vector giving info about duplication of min or max values for training: c(mode, proportion, times) 
+#                     ex.: c(max,0.9,1); c(min,0.1,1) adds the highest/lowest 10% of the values 1 time
 
 bayes_opt_GRU <- function(x, 
                            y, 
@@ -951,7 +984,7 @@ create_MLP <- function(layers,
 
 
 #############################################
-# Bayesian optimization for neural network Models
+# Bayesian optimization for Multilayer Perceptron models
 #############################################
 
 # Implementation of Bayesian hyper parameter optimization for MLP.
@@ -962,18 +995,17 @@ create_MLP <- function(layers,
 
 # @ x:      predictor variables in a 2D format. Input data should be standard normalized. Creates the needed 3D format inside.
 # @ y:      target variable in a 1D format. Input data should be standard normalized. Creates the needed 2D format inside.
-# @
-# @
-# @
-# @
-# @
-# @
-# @
-# @
-# @
-# @
-# @ duplicate:  vector giving info about duplication of min or max values for training: c(mode, proportion, times) 
-#               ex.: c(max,0.9,1); c(min,0.1,1) adds the highest/lowest 10% of the values 1 time
+# @ layers:           vector giving the lower and upper bounds (integers) of optimization of number of layers
+# @ units:            vector giving the lower and upper bounds (integers) of optimization of number of units per layer
+# @ dropout:          vector giving the lower and upper bounds of optimization of the dropout rate
+# @ batchsize:        vector giving the lower and upper bounds (integers) of optimization of batch size
+# @ epochs_mlp:       integer giving the maximum epochs used to train the lstm models
+# @ earlystop:        integer giving number of epochs after which the training stops with no improvement (best epoch is saved)
+# @ validation_split: proportion of data used for training (0<p>1). e.x.: 0.8 means 80% of data for training, 20% of data for validation
+# @ epochs_opt:       number of optimization epochs during Bayesian optimization
+# @ initPoints:       number of initial points calculated for Bayesian optimization
+# @ duplicate:        vector giving info about duplication of min or max values for training: c(mode, proportion, times) 
+#                     ex.: c(max,0.9,1); c(min,0.1,1) adds the highest/lowest 10% of the values 1 time
 
 bayes_opt_MLP <- function(x, 
                           y, 
@@ -1135,9 +1167,14 @@ monthly_mean <- function(measured,
 
 
 monthly_plot <- function(data, main="Titel"){
+  maxy <- max(colMeans(data$measured, na.rm = TRUE), 
+              colMeans(data$modeled, na.rm = TRUE)) * 1.1
+  miny <- min(colMeans(data$measured, na.rm = TRUE), 
+              colMeans(data$modeled, na.rm = TRUE)) * 0.9
   plot(colMeans(data$measured, na.rm = TRUE), 
        type = "l", xlab = "Month", ylab = "Mean Discharge", 
-       xaxt = "n", col = "blue", main = main)
+       xaxt = "n", col = "blue", main = main,
+       ylim = c(miny,maxy))
   lines(colMeans(data$modeled, na.rm = TRUE), col = "chartreuse4")
   axis(side = 1, at = 1:12, labels = month.abb)
   legend("topright", legend = c("model", "data"), bty = "n", 
