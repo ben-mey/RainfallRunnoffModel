@@ -989,7 +989,7 @@ create_MLP <- function(layers,
 
 # Implementation of Bayesian hyper parameter optimization for MLP.
 # Optimization can take quite some time. On my machine (GTX 3070) a run with default parameters takes
-# between 20 and 30 minutes (depends on how complex the optimal model is).
+# between 30 and 45 minutes (depends on how complex the optimal model is).
 # Returns a list with the optimized hyper parameter, the optimized model, and a summary of the Bayesian optimization.
 
 
@@ -1106,6 +1106,83 @@ bayes_opt_MLP <- function(x,
 
 
 #############################################
+# Bayesian optimization for Support Vector Machine Regression models
+#############################################
+
+# Implementation of Bayesian hyper parameter optimization for SVR.
+# Optimization can take quite some time (only 1 thread). On my machine (i7 12700k) a run with default parameters 
+# and the 15 most important predictors (lgbm,xgboost) takes between 20 and 30 minutes (depends on how complex the optimal model is).
+# Returns a list with the optimized hyper parameter, the optimized model, and a summary of the Bayesian optimization.
+
+
+# @ x:            predictor variables in a 2D format. Input data should be standard normalized. Creates the needed 3D format inside.
+# @ y:            target variable in a 1D format. Input data should be standard normalized. Creates the needed 2D format inside.
+# @ epsilon:      vector giving the lower and upper bounds of optimization of epsilon (error tolerance of the model)
+# @ cost:         vector giving the lower and upper bounds (integers) of the cost parameter (penalty for datapoints outside of the error tolerance)
+# @ epochs_opt:   number of optimization epochs during Bayesian optimization
+# @ initPoints:   number of initial points calculated for Bayesian optimization
+
+bayes_opt_SVMR <- function(x,
+                           y,
+                           epsilon = c(0.01,0.8),
+                           cost = c(1L,25L),
+                           initPoints = 15,
+                           epochs_opt = 10,
+                           cross = 4){
+  
+  time1 <- as.numeric(Sys.time())
+  
+  obj_func <- function(epsilon, cost) { 
+    
+    
+    
+    history_svmr <- e1071::svm(x = x, 
+                               y = y, 
+                               epsilon = epsilon,
+                               cost = cost,
+                               cross = cross,
+                               type = "eps-regression")
+    
+    lst <- list(
+      
+      # First argument must be named as "Score"
+      # Function finds maxima so inverting the output
+      Score = -history_svmr$tot.MSE)
+    
+    return(lst)
+  }
+  
+  
+  bounds <- list(epsilon = epsilon, 
+                 cost = cost)
+  
+  
+  set.seed(1234)
+  bayes_out <- bayesOpt(FUN = obj_func, bounds = bounds, initPoints = initPoints, iters.n = epochs_opt)
+  
+  # Get optimized parameters
+  opt_params <- getBestPars(bayes_out)
+  
+  
+  
+  # Fit a svmr model with optimized parameters
+  opt_mdl <- e1071::svm(x=x, 
+                        y=y,
+                        epsilon = opt_params$epsilon,
+                        cost = opt_params$cost,
+                        type = "eps-regression")
+  
+  output_list <- list(optimized_param = data.frame(getBestPars(bayes_out)),
+                      optimized_mod = opt_mdl,
+                      bayes_summary = bayes_out$scoreSummary)
+  
+  print(paste("optimization completed in: ", as.numeric(Sys.time()-time1)%/%60, " minutes ",
+              round(as.numeric(Sys.time()-time1)%%60, digits = 1), " seconds"))
+  return(output_list)
+}
+
+
+#############################################
 # calculate monthly means of measured and modeled data
 #############################################
 
@@ -1194,7 +1271,7 @@ monthly_plot <- function(data, main="Titel"){
 # @ modeled:      vector with modeled data.
 # @ catchment:    string with catchment name. Used to generate the plot titels and save names.
 # @ unscale:      vector giving the standard deviation and mean used to transform the LSTM output back: c(std,mean)
-# @ mod_type:     String with model name. Use one of the exact strings: "xgb", "lstm", "lgbm", "gru", "mlp"
+# @ mod_type:     String with model name. Use one of the exact strings: "xgb", "lstm", "lgbm", "gru", "mlp", "svmr"
 # @ model:        model if model type is xgb or lgbm
 
 analyze_model <- function(measured, 
@@ -1229,7 +1306,7 @@ analyze_model <- function(measured,
     abline(h=0)
     abline(h = measured_mean, col = "blue")
     abline(h = mod_mean, col = "chartreuse4")
-    legend("topright", legend = c("model", "data", "model - data"), bty = "n", 
+    legend("topright", legend = c("model", "data", "model error"), bty = "n", 
            lty = 1, col = c("chartreuse4", "blue", "red"))
     dev.off()
     
@@ -1264,7 +1341,7 @@ analyze_model <- function(measured,
     abline(h=0)
     abline(h = measured_mean, col = "blue")
     abline(h = mod_mean, col = "chartreuse4")
-    legend("topright", legend = c("model", "data", "model - data"), bty = "n", 
+    legend("topright", legend = c("model", "data", "model error"), bty = "n", 
            lty = 1, col = c("chartreuse4", "blue", "red"))
     dev.off()
     
@@ -1308,7 +1385,7 @@ analyze_model <- function(measured,
     abline(h=0)
     abline(h = measured_mean, col = "blue")
     abline(h = mod_mean, col = "chartreuse4")
-    legend("topright", legend = c("model", "data", "model - data"), bty = "n", 
+    legend("topright", legend = c("model", "data", "model error"), bty = "n", 
            lty = 1, col = c("chartreuse4", "blue", "red"))
     dev.off()
   }
@@ -1347,7 +1424,7 @@ analyze_model <- function(measured,
     abline(h=0)
     abline(h = measured_mean, col = "blue")
     abline(h = mod_mean, col = "chartreuse4")
-    legend("topright", legend = c("model", "data", "model - data"), bty = "n", 
+    legend("topright", legend = c("model", "data", "model error"), bty = "n", 
            lty = 1, col = c("chartreuse4", "blue", "red"))
     dev.off()
   }
@@ -1382,9 +1459,72 @@ analyze_model <- function(measured,
     abline(h=0)
     abline(h = measured_mean, col = "blue")
     abline(h = mod_mean, col = "chartreuse4")
-    legend("topright", legend = c("model", "data", "model - data"), bty = "n", 
+    legend("topright", legend = c("model", "data", "model error"), bty = "n", 
            lty = 1, col = c("chartreuse4", "blue", "red"))
     dev.off()
+  }
+  
+  if(mod_type=="svmr"){
+    
+    rmse <- round(sqrt(mean((modeled-measured)^2)), digits = 2)
+    mod_mean <- round(mean(modeled), digits = 2)
+    measured_mean <- round(mean(measured), digits = 2)
+    mod_top5 <- round(quantile(x = modeled, probs = 0.95), digits = 2)
+    measured_top5 <- round(quantile(x = measured, probs = 0.95), digits = 2)
+    mod_low5 <- round(quantile(x = modeled, probs = 0.05), digits = 2)
+    measured_low5 <- round(quantile(x = measured, probs = 0.05), digits = 2)
+    mod_nse <- round(NSE(sim = as.matrix(modeled), obs = as.matrix(measured)), digits = 3)
+    mod_kge <- round(KGE(sim = as.matrix(modeled), obs = as.matrix(measured)),digits = 3)
+    
+    
+    maxy <- max(measured,modeled)*1.1
+    miny <- min(modeled-measured)*1.1
+    path1 <- paste("../Results/Plots/", catchment, "_SVMRegression_ts.pdf", sep = "")
+    
+    pdf(file = path1, width = 14, height = 7)
+    plot(measured, type = "l", col="blue", ylim = c(miny,maxy), 
+         main = paste(catchment, "SVMRegression"), ylab = "Discharge")
+    lines(modeled, col="chartreuse4")
+    lines(modeled-measured, col="red")
+    abline(h=0)
+    abline(h = measured_mean, col = "blue")
+    abline(h = mod_mean, col = "chartreuse4")
+    legend("topright", legend = c("model", "data", "model error"), bty = "n", 
+           lty = 1, col = c("chartreuse4", "blue", "red"))
+    dev.off()
+    
+  }
+  
+  
+  if(mod_type=="lm"){
+    
+    rmse <- round(sqrt(mean((modeled-measured)^2)), digits = 2)
+    mod_mean <- round(mean(modeled), digits = 2)
+    measured_mean <- round(mean(measured), digits = 2)
+    mod_top5 <- round(quantile(x = modeled, probs = 0.95), digits = 2)
+    measured_top5 <- round(quantile(x = measured, probs = 0.95), digits = 2)
+    mod_low5 <- round(quantile(x = modeled, probs = 0.05), digits = 2)
+    measured_low5 <- round(quantile(x = measured, probs = 0.05), digits = 2)
+    mod_nse <- round(NSE(sim = as.matrix(modeled), obs = as.matrix(measured)), digits = 3)
+    mod_kge <- round(KGE(sim = as.matrix(modeled), obs = as.matrix(measured)),digits = 3)
+    
+    
+    maxy <- max(measured,modeled)*1.1
+    miny <- min(modeled-measured)*1.1
+    path1 <- paste("../Results/Plots/", catchment, "_LM_ts.pdf", sep = "")
+    
+    pdf(file = path1, width = 14, height = 7)
+    plot(measured, type = "l", col="blue", ylim = c(miny,maxy), 
+         main = paste(catchment, "LM"), ylab = "Discharge")
+    lines(modeled, col="chartreuse4")
+    lines(modeled-measured, col="red")
+    abline(h=0)
+    abline(h = measured_mean, col = "blue")
+    abline(h = mod_mean, col = "chartreuse4")
+    legend("topright", legend = c("model", "data", "model error"), bty = "n", 
+           lty = 1, col = c("chartreuse4", "blue", "red"))
+    dev.off()
+    
   }
   
   cat("\n",catchment, ";",

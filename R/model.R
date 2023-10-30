@@ -70,6 +70,7 @@ library(ParBayesianOptimization)
 library(lightgbm)
 library(lubridate)
 library(tidyr)
+library(e1071)
 
 
 # get file path and set working directory. A long as the folder structure is the same as I used, all paths should work.
@@ -167,7 +168,8 @@ data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_20
 # filter$highpass121 <- h.data$discharge_vol.m3.s.-filter$lowpass121
 
 p.data <- dataPrep(data[,c(1,2,5,6)])
-
+calib <- p.data$calib
+valid <- p.data$valid
 acf(x=p.data$data$discharge,plot = TRUE, lag.max = 365)
 
 # h.weights.max <- rep(1,length(h.data$discharge_vol.m3.s.))
@@ -715,7 +717,7 @@ KGE(sim = as.matrix(u_gru), obs = as.matrix(wushu))
 
 
 
-
+######################
 
 
 
@@ -736,11 +738,8 @@ for (t in 1:1) {
 
 
 mlp_mod2 <- bayes_opt_MLP(x = h.calib[,-1], 
-                          y = h.calib[,1] 
-                          ,epochs_opt = 10, 
-                          initPoints = 15
-                          , validation_split = 0.8
-                          )
+                          y = h.calib[,1], 
+                          validation_split = 0.8)
 mlp_mod2$bayes_summary
 
 mlp_thur <- mlp_mod2
@@ -768,3 +767,101 @@ monthly_plot(data = mon_mean,
              main = "Thur MLP")
 dev.off()
 
+
+#######################
+
+
+svmr_mod2 <- bayes_opt_SVMR(x = p.data$data[calib,c(4,5,11,19:30)], 
+                            y = p.data$data[calib,1], 
+                            cross = 4)
+svmr_mod2$bayes_summary
+svmr_thur <- svmr_mod2
+save(svmr_thur, file = "../Results/Models/Thur_svmr.RData")
+psvmr <- predict(object = svmr_mod2$optimized_mod, newdata = p.data$data[valid,c(4,5,11,19:30)])
+
+analyze_model(measured = p.data$data$discharge[valid],
+              modeled = psvmr,
+              catchment = "Thur",
+              mod_type = "svmr",
+              model = svmr_thur[[2]])
+
+mon_mean <- monthly_mean(measured = p.data$data$discharge[valid],
+                         modeled = psvmr,
+                         date = p.data$date[valid])
+
+pdf(file = "../Results/Plots/Thur_SVMRegression_monthly.pdf")
+monthly_plot(data = mon_mean,
+             main = "Thur SVMRegression")
+dev.off()
+
+
+maxy <- max(svmr.pred,p.data$data[valid,1])*1.1
+miny <- min(svmr.pred-p.data$data[valid,1])*1.1
+
+rmse(p.data$data[valid,1], svmr.pred)
+plot(p.data$data[valid,1], type = "l", col="blue", ylim = c(miny,maxy), main = "main", ylab = "Discharge")
+lines(svmr.pred, col="green")
+lines(svmr.pred-p.data$data[valid,1], col="red")
+abline(h=0)
+legend("topright", legend = c("model", "data", "model - data"), bty = "n",
+       lty = 1, col = c("green", "blue", "red"))
+
+mean(svmr.pred)
+mean(p.data$data[valid,1])
+NSE(sim = as.matrix(svmr.pred), obs = as.matrix(p.data$data[valid,1]))
+KGE(sim = as.matrix(svmr.pred), obs = as.matrix(p.data$data[valid,1]))
+
+
+
+
+
+
+
+
+
+
+######################
+# lm for Thur
+######################
+
+test <- lm(formula = discharge ~ lag1precip + sum4precip + sum6precip + sum7precip + lag2precip + 
+                                 sum15precip + sum30precip + mean30temp + sum5precip +
+                                 mean60temp + mean7temp + sum3precip + mean3temp,
+           data = p.data$data[calib,])
+
+test.pred <- predict(object = test, newdata = p.data$data[valid,])
+
+
+maxy <- max(test.pred,p.data$data[valid,1])*1.1
+miny <- min(test.pred-p.data$data[valid,1])*1.1
+
+rmse(p.data$data[valid,1], test.pred)
+plot(p.data$data[valid,1], type = "l", col="blue", ylim = c(miny,maxy), main = "main", ylab = "Discharge")
+lines(test.pred, col="green")
+lines(test.pred-p.data$data[valid,1], col="red")
+abline(h=0)
+legend("topright", legend = c("model", "data", "model - data"), bty = "n",
+       lty = 1, col = c("green", "blue", "red"))
+
+mean(test.pred)
+mean(p.data$data[valid,1])
+NSE(sim = as.matrix(test.pred), obs = as.matrix(p.data$data[valid,1]))
+KGE(sim = as.matrix(test.pred), obs = as.matrix(p.data$data[valid,1]))
+
+summary(test)
+
+
+analyze_model(measured = p.data$data$discharge[valid],
+              modeled = test.pred,
+              catchment = "Thur",
+              mod_type = "lm",
+              model = test)
+
+mon_mean <- monthly_mean(measured = p.data$data$discharge[valid],
+                         modeled = test.pred,
+                         date = p.data$date[valid])
+
+pdf(file = "../Results/Plots/Thur_LMRegression_monthly.pdf")
+monthly_plot(data = mon_mean,
+             main = "Thur LMRegression")
+dev.off()
