@@ -1124,7 +1124,7 @@ bayes_opt_MLP <- function(x,
 
 bayes_opt_SVMR <- function(x,
                            y,
-                           epsilon = c(0.01,0.8),
+                           epsilon = c(0.01,0.6),
                            cost = c(1L,25L),
                            initPoints = 15,
                            epochs_opt = 10,

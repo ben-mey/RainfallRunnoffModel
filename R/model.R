@@ -82,27 +82,32 @@ source("functions.R")
 # Ticino Bellinzona
 # data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2020.txt",
 #                      header = TRUE, sep = ";")
+# catchment <- "Ticino"
 
 # Broy Payerne
 # data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2034.txt",
 #                      header = TRUE, sep = ";")
+# catchment <- "Broy"
 
 # Thur Andelfingen
-data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2044.txt",
-                   header = TRUE, sep = ";")
+# data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2044.txt",
+#                    header = TRUE, sep = ";")
+# catchment <- "Thur"
 
 # Massa Blatten bei Naters
-# data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2161.txt",
-#                    header = TRUE, sep = ";")
+data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2161.txt",
+                   header = TRUE, sep = ";")
+catchment <- "Massa"
 
 # Weisse Lütschine Zweilütschinen
 # data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2200.txt",
 #                    header = TRUE, sep = ";")
+# catchment <- "Weisse Lütschine"
 
 # Dischmabach Davos
 # data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2327.txt",
 #                    header = TRUE, sep = ";")
-
+# catchment <- "Dischmabach"
 
 # h.data <- data[,c(1,2,5,6)]
 # dat <- strptime(data$date, format = "%Y-%m-%d")
@@ -494,14 +499,14 @@ y <- p.data$data[calib,1]
 source("functions.R")
 xgb_mod <- bayes_opt_xgb(data = as.matrix(p.data$data[calib,-1]), label = p.data$data[calib,1])
 
-xgb_thur <- xgb_mod
-save(xgb_thur, file = "../Results/Models/Thur_XBoost.RData")
+# xgb_thur <- xgb_mod
+save(xgb_mod, file = paste("../Results/Models/", catchment, "_XBoost.RData", sep = ""))
 
-pxgb1 <- predict(object = xgb_thur[[2]], newdata = as.matrix(p.data$data[valid,-1]))
+pxgb1 <- predict(object = xgb_mod[[2]], newdata = as.matrix(p.data$data[valid,-1]))
 
 analyze_model(measured = p.data$data$discharge[valid],
               modeled = pxgb1,
-              catchment = "Thur",
+              catchment = catchment,
               mod_type = "xgb",
               model = xgb_mod[[2]])
 
@@ -509,9 +514,9 @@ mon_mean <- monthly_mean(measured = p.data$data$discharge[valid],
                          modeled = pxgb1,
                          date = p.data$date[valid])
 
-pdf(file = "../Results/Plots/Thur_XBoost_monthly.pdf")
+pdf(file = paste("../Results/Plots/", catchment, "_XGBoost_monthly.pdf", sep = ""))
 monthly_plot(data = mon_mean,
-             main = "Thur XGBoost")
+             main = paste(catchment, "XGBoost"))
 dev.off()
 
 # maxy <- max(pxgb1,p.data$data[valid,1])*1.1
@@ -552,8 +557,8 @@ lstm_mod2 <- bayes_opt_LSTM(x = h.data.scale[calib,-1],
                             )
 lstm_mod2$bayes_summary
 
-lstm_thur <- lstm_mod2
-save(lstm_thur, file = "../Results/Models/Thur_LSTM.RData")
+# lstm_thur <- lstm_mod2
+save(lstm_mod2, file = paste("../Results/Models/", catchment, "_LSTM.RData", sep = ""))
 
 h.data.lstm_val <- dataPrepLSTM(x = h.data.scale[valid,-1], 
                                 y = h.data.scale[valid,1], 
@@ -569,7 +574,7 @@ me <- mean(p.data$data$discharge)
 std <- sd(p.data$data$discharge)
 pre_lstm_unscaled <-  analyze_model(measured = p.data$data$discharge[valid],
                                     modeled = pre_lstm,
-                                    catchment = "Thur",
+                                    catchment = catchment,
                                     mod_type = "lstm",
                                     unscale = c(std,me))
 
@@ -577,9 +582,9 @@ mon_mean <- monthly_mean(measured = p.data$data$discharge[valid],
                          modeled = pre_lstm_unscaled,
                          date = p.data$date[valid])
 
-pdf(file = "../Results/Plots/Thur_LSTM_monthly.pdf")
+pdf(file = paste("../Results/Plots/", catchment, "_LSTM_monthly.pdf", sep = ""))
 monthly_plot(data = mon_mean,
-             main = "Thur LSTM")
+             main = paste(catchment, "LSTM"))
 dev.off()
 
 summary(lstm_mod2$optimized_mod)
@@ -606,16 +611,17 @@ summary(lstm_mod2$optimized_mod)
 
 lgbm_mod <- bayes_opt_lgb(data = as.matrix(p.data$data[calib,-1]), label = p.data$data[calib,1])
 
-lgb_thur <- lgbm_mod
-save(lgb_thur, file = "../Results/Models/Thur_LightGBM_mod.RData")
-saveRDS.lgb.Booster(lgb_thur$optimized_mod, file = "../Results/Models/Thur_LightGBM_mod.RData")
+# lgb_thur <- lgbm_mod
+save(lgbm_mod, file = paste("../Results/Models/", catchment, "_LightGBM.RData", sep = ""))
+saveRDS.lgb.Booster(lgbm_mod$optimized_mod, 
+                    file = paste("../Results/Models/", catchment, "_LightGBM_mod.RData", sep = ""))
 
-plgbm <- predict(object = lgb_thur$optimized_mod, data = as.matrix(p.data$data[valid,-1]))
+plgbm <- predict(object = lgbm_mod$optimized_mod, data = as.matrix(p.data$data[valid,-1]))
 
 
 analyze_model(measured = p.data$data$discharge[valid],
               modeled = plgbm,
-              catchment = "Thur",
+              catchment = catchment,
               mod_type = "lgbm",
               model = lgbm_mod[[2]])
 
@@ -623,9 +629,9 @@ mon_mean <- monthly_mean(measured = p.data$data$discharge[valid],
                          modeled = plgbm,
                          date = p.data$date[valid])
 
-pdf(file = "../Results/Plots/Thur_LightGBM_monthly.pdf")
+pdf(file = paste("../Results/Plots/", catchment, "_LightGBM_monthly.pdf", sep = ""))
 monthly_plot(data = mon_mean,
-             main = "Thur LightGBM")
+             main = paste(catchment, "LightGBM"))
 dev.off()
 
 
@@ -653,7 +659,7 @@ dev.off()
 h.mean <- lapply(p.data$data, FUN = "mean",2, na.rm = TRUE)
 h.sd <- lapply(p.data$data, FUN = "sd",2)
 h.data.scale <- scale(p.data$data, center = TRUE)
-h.data.scale.mm <- normalize(p.data$data)
+# h.data.scale.mm <- normalize(p.data$data)
 
 
 
@@ -667,8 +673,8 @@ gru_mod2 <- bayes_opt_GRU(x = h.data.scale[calib,-1],
                         )
 gru_mod2$bayes_summary
 
-gru_thur <- gru_mod2
-save(gru_thur, file = "../Results/Models/Thur_GRU.RData")
+# gru_thur <- gru_mod2
+save(gru_mod2, file = paste("../Results/Models/", catchment, "_GRU.RData", sep = ""))
 
 h.data.gru_val <- dataPrepLSTM(x = h.data.scale[valid,-1], 
                                 y = h.data.scale[valid,1], 
@@ -683,7 +689,7 @@ me <- mean(p.data$data$discharge)
 std <- sd(p.data$data$discharge)
 pre_gru_unscaled <-  analyze_model(measured = p.data$data$discharge[valid],
                                     modeled = pre_gru,
-                                    catchment = "Thur",
+                                    catchment = catchment,
                                     mod_type = "gru",
                                     unscale = c(std,me))
 
@@ -691,9 +697,9 @@ mon_mean <- monthly_mean(measured = p.data$data$discharge[valid],
                          modeled = pre_gru_unscaled,
                          date = p.data$date[valid])
 
-pdf(file = "../Results/Plots/Thur_GRU_monthly.pdf")
+pdf(file = paste("../Results/Plots/", catchment, "_GRU_monthly.pdf", sep = ""))
 monthly_plot(data = mon_mean,
-             main = "Thur GRU")
+             main = paste(catchment, "GRU"))
 dev.off()
 
 
@@ -742,8 +748,8 @@ mlp_mod2 <- bayes_opt_MLP(x = h.calib[,-1],
                           validation_split = 0.8)
 mlp_mod2$bayes_summary
 
-mlp_thur <- mlp_mod2
-save(mlp_thur, file = "../Results/Models/Thur_MLP.RData")
+# mlp_thur <- mlp_mod2
+save(mlp_mod2, file = paste("../Results/Models/", catchment, "_MLP.RData", sep = ""))
 
 
 
@@ -754,7 +760,7 @@ me <- mean(p.data$data$discharge)
 std <- sd(p.data$data$discharge)
 pre_nn_unscaled <-  analyze_model(measured = p.data$data$discharge[valid],
                                     modeled = pre_mlp,
-                                    catchment = "Thur",
+                                    catchment = catchment,
                                     mod_type = "mlp",
                                     unscale = c(std,me))
 
@@ -762,60 +768,41 @@ mon_mean <- monthly_mean(measured = p.data$data$discharge[valid],
                          modeled = pre_nn_unscaled,
                          date = p.data$date[valid])
 
-pdf(file = "../Results/Plots/Thur_MLP_monthly.pdf")
+pdf(file = paste("../Results/Plots/", catchment, "_MLP_monthly.pdf", sep = ""))
 monthly_plot(data = mon_mean,
-             main = "Thur MLP")
+             main = paste(catchment, "MLP"))
 dev.off()
 
 
 #######################
 
+# Thur:   x = p.data$data[calib,c(4,5,11,19:30)]
+# Massa:  x = p.data$data[calib,c(3,4,10:12,17,23:31)]
 
-svmr_mod2 <- bayes_opt_SVMR(x = p.data$data[calib,c(4,5,11,19:30)], 
+svmr_mod2 <- bayes_opt_SVMR(x = p.data$data[calib,c(3,4,10:12,17,23:31)], 
                             y = p.data$data[calib,1], 
                             cross = 4)
 svmr_mod2$bayes_summary
-svmr_thur <- svmr_mod2
-save(svmr_thur, file = "../Results/Models/Thur_svmr.RData")
-psvmr <- predict(object = svmr_mod2$optimized_mod, newdata = p.data$data[valid,c(4,5,11,19:30)])
+# svmr_thur <- svmr_mod2
+save(svmr_mod2, file = paste("../Results/Models/", catchment, "_SVMR.RData", sep = ""))
+psvmr <- predict(object = svmr_mod2$optimized_mod, newdata = p.data$data[valid,c(3,4,10:12,17,23:31)])
+
+
 
 analyze_model(measured = p.data$data$discharge[valid],
               modeled = psvmr,
-              catchment = "Thur",
+              catchment = catchment,
               mod_type = "svmr",
-              model = svmr_thur[[2]])
+              model = svmr_mod2[[2]])
 
 mon_mean <- monthly_mean(measured = p.data$data$discharge[valid],
                          modeled = psvmr,
                          date = p.data$date[valid])
 
-pdf(file = "../Results/Plots/Thur_SVMRegression_monthly.pdf")
+pdf(file = paste("../Results/Plots/", catchment, "_SVMRegression_monthly.pdf", sep = ""))
 monthly_plot(data = mon_mean,
-             main = "Thur SVMRegression")
+             main = paste(catchment, "SVMRegression"))
 dev.off()
-
-
-maxy <- max(svmr.pred,p.data$data[valid,1])*1.1
-miny <- min(svmr.pred-p.data$data[valid,1])*1.1
-
-rmse(p.data$data[valid,1], svmr.pred)
-plot(p.data$data[valid,1], type = "l", col="blue", ylim = c(miny,maxy), main = "main", ylab = "Discharge")
-lines(svmr.pred, col="green")
-lines(svmr.pred-p.data$data[valid,1], col="red")
-abline(h=0)
-legend("topright", legend = c("model", "data", "model - data"), bty = "n",
-       lty = 1, col = c("green", "blue", "red"))
-
-mean(svmr.pred)
-mean(p.data$data[valid,1])
-NSE(sim = as.matrix(svmr.pred), obs = as.matrix(p.data$data[valid,1]))
-KGE(sim = as.matrix(svmr.pred), obs = as.matrix(p.data$data[valid,1]))
-
-
-
-
-
-
 
 
 
@@ -828,6 +815,17 @@ test <- lm(formula = discharge ~ lag1precip + sum4precip + sum6precip + sum7prec
                                  sum15precip + sum30precip + mean30temp + sum5precip +
                                  mean60temp + mean7temp + sum3precip + mean3temp,
            data = p.data$data[calib,])
+
+######################
+# lm for Massa
+######################
+
+test <- lm(formula = discharge ~ lag1precip + sum30precilag30 +
+             sum15precip + sum30precip + mean30temp + mean7temp + mean30templag30 +
+             mean3temp + lag2temp,
+           data = p.data$data[calib,])
+
+
 
 test.pred <- predict(object = test, newdata = p.data$data[valid,])
 
@@ -853,7 +851,7 @@ summary(test)
 
 analyze_model(measured = p.data$data$discharge[valid],
               modeled = test.pred,
-              catchment = "Thur",
+              catchment = catchment,
               mod_type = "lm",
               model = test)
 
@@ -861,7 +859,7 @@ mon_mean <- monthly_mean(measured = p.data$data$discharge[valid],
                          modeled = test.pred,
                          date = p.data$date[valid])
 
-pdf(file = "../Results/Plots/Thur_LMRegression_monthly.pdf")
+pdf(file = "../Results/Plots/Massa_LMRegression_monthly.pdf")
 monthly_plot(data = mon_mean,
-             main = "Thur LMRegression")
+             main = "Massa LMRegression")
 dev.off()
