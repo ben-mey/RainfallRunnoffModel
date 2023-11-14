@@ -350,16 +350,17 @@ trans_back <- function(x, min, max) {x * (max - min) + min}
 # Returns a list with the optimized hyper parameter, the optimized model, and a summary of the Bayesian optimization.
 
 
-# @ data:       matrix of predictor variables (x) used for training and cross validation
-# @ label:      vector with target variable (y) used for training and cross validation
-# @ max_depth:  vector giving the lower and upper bounds (integers) of optimization of max depth of the trees
-# @ eta:        vector giving the lower and upper bounds of optimization of the learning rate
-# @ alpha:      vector giving the lower and upper bounds of optimization of 
-# @ lambda:     vector giving the lower and upper bounds of optimization of 
-# @ nrounds:    maximum number of trees built
-# @ nfold:      number indicating how many fold the cross validation is done
-# @ epochs_opt: number of optimization epochs during Bayesian optimization
-# @ initPoints: number of initial points calculated for Bayesian optimization
+# @ data:             matrix of predictor variables (x) used for training and cross validation
+# @ label:            vector with target variable (y) used for training and cross validation
+# @ max_depth:        vector giving the lower and upper bounds (integers) of optimization of max depth of the trees
+# @ eta:              vector giving the lower and upper bounds of optimization of the learning rate
+# @ alpha:            vector giving the lower and upper bounds of optimization of L1 regularization on weights
+# @ lambda:           vector giving the lower and upper bounds of optimization of L2 regularization on weights (higher numbers make splitting more conservative and pruning easier)
+# @ min_child_weight: vector giving the lower and upper bounds of optimization of min amounts of data points in each leaf (only for regression)
+# @ nrounds:          maximum number of trees built
+# @ nfold:            number indicating how many fold the cross validation is done
+# @ epochs_opt:       number of optimization epochs during Bayesian optimization
+# @ initPoints:       number of initial points calculated for Bayesian optimization
 
 
 bayes_opt_xgb <- function(data, 
@@ -372,7 +373,7 @@ bayes_opt_xgb <- function(data,
                          nrounds = 250,
                          nfold = 5,
                          epochs_opt = 15,
-                         initPoints= 18){
+                         initPoints= 20){
   
   time1 <- as.numeric(Sys.time())
   
@@ -495,11 +496,11 @@ bayes_opt_lgb <- function(data,
                          label, 
                          max_depth = c(2L,12L), 
                          eta = c(0.001,0.25),
-                         num_leaves = c(2L,100L),
+                         num_leaves = c(2L,120L),
                          nrounds = 200,
                          nfold = 5,
-                         epochs_opt = 10,
-                         initPoints = 12){
+                         epochs_opt = 15,
+                         initPoints = 20){
   
   time1 <- as.numeric(Sys.time())
   
@@ -637,7 +638,7 @@ create_LSTM <- function(layers, units, dropout,
 
 # Implementation of Bayesian hyper parameter optimization for LSTM.
 # Take care: optimization can take quite long. On my machine (GTX 3070) a run with default parameters takes
-# between 1 and 3 hours (depends on how complex the optimal model is).
+# between 50 minutes and 3 hours (depends on how complex the optimal model is).
 # Returns a list with the optimized hyper parameter, the optimized model, and a summary of the Bayesian optimization.
 
 
@@ -1016,7 +1017,7 @@ bayes_opt_MLP <- function(x,
                           epochs_mlp = 100,
                           earlystop = 8,
                           validation_split = 0.25,
-                          initPoints = 25,
+                          initPoints = 20,
                           epochs_opt = 15,
                           duplicate = FALSE,
                           activation = "softmax"){
@@ -1126,7 +1127,7 @@ bayes_opt_SVMR <- function(x,
                            y,
                            epsilon = c(0.01,0.6),
                            cost = c(1L,25L),
-                           initPoints = 15,
+                           initPoints = 18,
                            epochs_opt = 10,
                            cross = 4){
   

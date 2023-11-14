@@ -80,9 +80,9 @@ setwd(wd)
 source("functions.R")
 
 # Ticino Bellinzona
-# data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2020.txt",
-#                      header = TRUE, sep = ";")
-# catchment <- "Ticino"
+data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2020.txt",
+                     header = TRUE, sep = ";")
+catchment <- "Ticino"
 
 # Broy Payerne
 # data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2034.txt",
@@ -95,9 +95,9 @@ source("functions.R")
 # catchment <- "Thur"
 
 # Massa Blatten bei Naters
-data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2161.txt",
-                   header = TRUE, sep = ";")
-catchment <- "Massa"
+# data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2161.txt",
+#                    header = TRUE, sep = ";")
+# catchment <- "Massa"
 
 # Weisse Lütschine Zweilütschinen
 # data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2200.txt",
@@ -552,7 +552,7 @@ lstm_mod2 <- bayes_opt_LSTM(x = h.data.scale[calib,-1],
                             y = h.data.scale[calib,1], 
                             epochs_opt = 15, 
                             initPoints = 25
-                            , duplicate = c(0.1, 0.9, 1)
+                            , duplicate = c(0.05, 0.85, 1)
                             , validation_split = 0.8
                             )
 lstm_mod2$bayes_summary
@@ -667,7 +667,7 @@ h.data.scale <- scale(p.data$data, center = TRUE)
 gru_mod2 <- bayes_opt_GRU(x = h.data.scale[calib,-1], 
                             y = h.data.scale[calib,1], 
                             epochs_opt = 15, 
-                            initPoints = 25
+                            initPoints = 20
                             , duplicate = c(0.1, 0.9,1)
                             , validation_split = 0.8
                         )
@@ -725,18 +725,18 @@ KGE(sim = as.matrix(u_gru), obs = as.matrix(wushu))
 
 ######################
 
-
+# Ticino (0.05,0.9,2)
 
 h.mean <- lapply(p.data$data, FUN = "mean",2, na.rm = TRUE)
 h.sd <- lapply(p.data$data, FUN = "sd",2)
 h.data.scale <- scale(p.data$data, center = TRUE)
 
 h.calib <- h.data.scale[calib,]
-filt.max <- h.calib[,1] > quantile(x = h.calib[,1], probs = 0.99)
-filt.min <- h.calib[,1] < quantile(x = h.calib[,1], probs = 0.01)
+filt.max <- h.calib[,1] > quantile(x = h.calib[,1], probs = 0.9)
+filt.min <- h.calib[,1] < quantile(x = h.calib[,1], probs = 0.05)
 add.max <- h.calib[filt.max,]
 add.min <- h.calib[filt.min,]
-for (t in 1:1) {
+for (t in 1:2) {
   h.calib <- rbind(add.max, h.calib)
   h.calib <- rbind(add.min, h.calib)
 }
@@ -778,14 +778,15 @@ dev.off()
 
 # Thur:   x = p.data$data[calib,c(4,5,11,19:30)]
 # Massa:  x = p.data$data[calib,c(3,4,10:12,17,23:31)]
+# Ticino: x = p.data$data[calib,c(3,4,11,19:21,23:31)]
 
-svmr_mod2 <- bayes_opt_SVMR(x = p.data$data[calib,c(3,4,10:12,17,23:31)], 
+svmr_mod2 <- bayes_opt_SVMR(x = p.data$data[calib,c(3,4,11,19:21,23:31)], 
                             y = p.data$data[calib,1], 
                             cross = 4)
 svmr_mod2$bayes_summary
 # svmr_thur <- svmr_mod2
 save(svmr_mod2, file = paste("../Results/Models/", catchment, "_SVMR.RData", sep = ""))
-psvmr <- predict(object = svmr_mod2$optimized_mod, newdata = p.data$data[valid,c(3,4,10:12,17,23:31)])
+psvmr <- predict(object = svmr_mod2$optimized_mod, newdata = p.data$data[valid,c(3,4,11,19:21,23:31)])
 
 
 
