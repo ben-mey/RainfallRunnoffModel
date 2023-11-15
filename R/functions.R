@@ -326,19 +326,38 @@ optimize_xgb <- function(data, label, vdata = NA, vlabel = NA, max.depth = 3:8, 
 # normalize input data for MLP,LSTM, and GRU model inputs
 ################################################
 
-# to normalize the input data for MLP,LSTM, and GRU to be between 0 and 1
-# @ x a vector, data frame or matrix to be transformed column wise
+# to normalize the input data for MLP,LSTM, and GRU according to the variant
+# @ x:        a vector, data frame or matrix to be transformed column wise
+# @ Variant:  string giving the variant of normalization. Either "stdnorm" which 
+#             standardizes and normalizes the data or "norm1" which scales them to be between 0 and 1
 
 
-normalize <- function(x) {
-  return (apply(X = as.matrix(x), MARGIN = 2,FUN = function(x) (x - min(x)) / (max(x) - min(x))))
+normalize <- function(x, variant = "stdnorm") {
+  if(variant == "norm1"){
+    return(apply(X = as.matrix(x), MARGIN = 2,FUN = function(x) (x - min(x)) / (max(x) - min(x))))
+  }
+  
+  if(variant == "stdnorm"){
+    return(scale(x, center = TRUE))
+  }
 }
 
 
 ################################
-# transform a vector back, give the min & max of the untransformed data.
+# transform a scaled vector back to the original scale
 
-trans_back <- function(x, min, max) {x * (max - min) + min}
+# @ variant:  Variant used to normalize the data: "stdnorm" or "norm1"
+# @ unscale:  vector giving either c(sd,mean) for "stdnorm" or c(min,max) for "norm1"
+
+trans_back <- function(x, unscale, variant = "stdnorm") {
+  if (variant == "norm1") {
+    x * (unscale[2] - unscale[1]) + unscale[1]
+  }
+  if (variant == "stdnorm") {
+    x*as.numeric(unscale[1])+as.numeric(unscale[2])
+  }
+  
+  }
 
 
 ################################################
@@ -664,7 +683,7 @@ bayes_opt_LSTM <- function(x,
                          dropout = c(0,0.4),
                          batchsize = c(5L,100L),
                          timesteps = c(5L,100L),
-                         epochs_lstm = 100,
+                         epochs_lstm = 200,
                          earlystop = 8,
                          validation_split = 0.25,
                          initPoints = 20,
@@ -842,7 +861,7 @@ bayes_opt_GRU <- function(x,
                            dropout = c(0,0.4),
                            batchsize = c(5L,100L),
                            timesteps = c(5L,100L),
-                           epochs_gru = 100,
+                           epochs_gru = 200,
                            earlystop = 8,
                            validation_split = 0.25,
                            initPoints = 20,
@@ -1014,7 +1033,7 @@ bayes_opt_MLP <- function(x,
                           units = c(5L,150L),
                           dropout = c(0,0.4),
                           batchsize = c(5L,100L),
-                          epochs_mlp = 100,
+                          epochs_mlp = 200,
                           earlystop = 8,
                           validation_split = 0.25,
                           initPoints = 20,
@@ -1107,7 +1126,7 @@ bayes_opt_MLP <- function(x,
 
 
 #############################################
-# Bayesian optimization for Support Vector Machine Regression models
+# Bayesian optimization for Support Vector Regression models
 #############################################
 
 # Implementation of Bayesian hyper parameter optimization for SVR.
@@ -1123,7 +1142,7 @@ bayes_opt_MLP <- function(x,
 # @ epochs_opt:   number of optimization epochs during Bayesian optimization
 # @ initPoints:   number of initial points calculated for Bayesian optimization
 
-bayes_opt_SVMR <- function(x,
+bayes_opt_SVR <- function(x,
                            y,
                            epsilon = c(0.01,0.6),
                            cost = c(1L,25L),
@@ -1137,7 +1156,7 @@ bayes_opt_SVMR <- function(x,
     
     
     
-    history_svmr <- e1071::svm(x = x, 
+    history_svr <- e1071::svm(x = x, 
                                y = y, 
                                epsilon = epsilon,
                                cost = cost,
@@ -1148,7 +1167,7 @@ bayes_opt_SVMR <- function(x,
       
       # First argument must be named as "Score"
       # Function finds maxima so inverting the output
-      Score = -history_svmr$tot.MSE)
+      Score = -history_svr$tot.MSE)
     
     return(lst)
   }
@@ -1166,7 +1185,7 @@ bayes_opt_SVMR <- function(x,
   
   
   
-  # Fit a svmr model with optimized parameters
+  # Fit a svr model with optimized parameters
   opt_mdl <- e1071::svm(x=x, 
                         y=y,
                         epsilon = opt_params$epsilon,
@@ -1267,12 +1286,12 @@ monthly_plot <- function(data, main="Titel"){
 # 
 # 
 
-
 # @ measured:     vector with measured data.
 # @ modeled:      vector with modeled data.
-# @ catchment:    string with catchment name. Used to generate the plot titels and save names.
-# @ unscale:      vector giving the standard deviation and mean used to transform the LSTM output back: c(std,mean)
-# @ mod_type:     String with model name. Use one of the exact strings: "xgb", "lstm", "lgbm", "gru", "mlp", "svmr"
+# @ catchment:    string with catchment name. Used to generate the plot titles and save names.
+# @ unscale:      vector giving the sd and mean or min and max of the original data as well as the variant. 
+#                 used to transform the ANN output back: c(sd,mean,"stdnorm") or c(min,max,"norm1")
+# @ mod_type:     String with model name. Use one of the exact strings: "xgb", "lstm", "lgbm", "gru", "mlp", "svr"
 # @ model:        model if model type is xgb or lgbm
 
 analyze_model <- function(measured, 
@@ -1283,6 +1302,7 @@ analyze_model <- function(measured,
                           model=NULL){
   if(mod_type=="xgb"){
     
+    # calculate some model quality measures
     rmse <- round(sqrt(mean((modeled-measured)^2)), digits = 2)
     mod_mean <- round(mean(modeled), digits = 2)
     measured_mean <- round(mean(measured), digits = 2)
@@ -1292,13 +1312,18 @@ analyze_model <- function(measured,
     measured_low5 <- round(quantile(x = measured, probs = 0.05), digits = 2)
     mod_nse <- round(NSE(sim = as.matrix(modeled), obs = as.matrix(measured)), digits = 3)
     mod_kge <- round(KGE(sim = as.matrix(modeled), obs = as.matrix(measured)),digits = 3)
+    corre <- round(cor(x=measured, y=modeled),digits = 3)
     
-    
+    # Calculate the y limits for the plot later on
     maxy <- max(measured,modeled)*1.1
     miny <- min(modeled-measured)*1.1
+    
+    # create paths for plots
     path1 <- paste("../Results/Plots/", catchment, "_XGBoost_ts.pdf", sep = "")
     path2 <- paste("../Results/Plots/", catchment, "_XGBoost_importance.pdf", sep = "")
+    path3 <- paste("../Results/Plots/", catchment, "_XGBoost_QQplot.pdf", sep = "")
     
+    # Plot the measured discharge, modeled discharge, both means and the model error and save it to a pdf file
     pdf(file = path1, width = 14, height = 7)
     plot(measured, type = "l", col="blue", ylim = c(miny,maxy), 
          main = paste(catchment, "XGBoost"), ylab = "Discharge")
@@ -1311,13 +1336,22 @@ analyze_model <- function(measured,
            lty = 1, col = c("chartreuse4", "blue", "red"))
     dev.off()
     
+    # Plots the importance of predictors of the model (top 15)
     pdf(file = path2)
     xgb.plot.importance(xgb.importance(model=model), top_n = 15)
     dev.off()
+    
+    # create a QQ Plot
+    pdf(file = path3)
+    qqplot(x=measured,y=modeled, xlab = "Measured", ylab = "Modeled", main = paste(catchment, "XGBoost", "QQ Plot"))
+    lines(x=c(0,2000), y=c(0,2000))
+    dev.off()
+    
   }
   
   if(mod_type=="lgbm") {
     
+    # calculate some model quality measures
     rmse <- round(sqrt(mean((modeled-measured)^2)), digits = 2)
     mod_mean <- round(mean(modeled), digits = 2)
     measured_mean <- round(mean(measured), digits = 2)
@@ -1327,13 +1361,18 @@ analyze_model <- function(measured,
     measured_low5 <- round(quantile(x = measured, probs = 0.05), digits = 2)
     mod_nse <- round(NSE(sim = as.matrix(modeled), obs = as.matrix(measured)), digits = 3)
     mod_kge <- round(KGE(sim = as.matrix(modeled), obs = as.matrix(measured)),digits = 3)
+    corre <- round(cor(x=measured, y=modeled),digits = 3)
     
-    
+    # Calculate the y limits for the plot later on
     maxy <- max(measured,modeled)*1.1
     miny <- min(modeled-measured)*1.1
+    
+    # create paths for plots
     path1 <- paste("../Results/Plots/", catchment, "_LightGBM_ts.pdf", sep = "")
     path2 <- paste("../Results/Plots/", catchment, "_LightGBM_importance.pdf", sep = "")
+    path3 <- paste("../Results/Plots/", catchment, "_LightGBM_QQplot.pdf", sep = "")
     
+    # Plot the measured discharge, modeled discharge, both means and the model error and save it to a pdf file
     pdf(file = path1, width = 14, height = 7)
     plot(measured, type = "l", col="blue", ylim = c(miny,maxy), 
          main = paste(catchment, "LightGBM"), ylab = "Discharge")
@@ -1346,8 +1385,15 @@ analyze_model <- function(measured,
            lty = 1, col = c("chartreuse4", "blue", "red"))
     dev.off()
     
+    # Plots the importance of predictors of the model (top 15)
     pdf(file = path2)
     lgb.plot.importance(lgb.importance(model=model),top_n = 15)
+    dev.off()
+    
+    # create a QQ Plot
+    pdf(file = path3)
+    qqplot(x=measured,y=modeled, xlab = "Measured", ylab = "Modeled", main = paste(catchment, "LightGBM", "QQ Plot"))
+    lines(x=c(0,2000), y=c(0,2000))
     dev.off()
     
   }
@@ -1358,10 +1404,10 @@ analyze_model <- function(measured,
     skip <- length(modeled)-length(measured)
     measured <- tail(measured, n = skip)
     
-    # transform the modeled data back
-    modeled <- modeled*unscale[1]+unscale[2]
+    # transform the modeled data back depending on the variant used to transform them
+    modeled <- trans_back(modeled, unscale = c(unscale[1],unscale[2]), variant = unscale[3])
     
-    # calculate statistics
+    # calculate some model quality measures
     rmse <- round(sqrt(mean((modeled-measured)^2)), digits = 2)
     mod_mean <- round(mean(modeled), digits = 2)
     measured_mean <- round(mean(measured), digits = 2)
@@ -1371,13 +1417,17 @@ analyze_model <- function(measured,
     measured_low5 <- round(quantile(x = measured, probs = 0.05), digits = 2)
     mod_nse <- round(NSE(sim = as.matrix(modeled), obs = as.matrix(measured)), digits = 3)
     mod_kge <- round(KGE(sim = as.matrix(modeled), obs = as.matrix(measured)),digits = 3)
+    corre <- round(cor(x=measured, y=modeled),digits = 3)
     
-    
+    # Calculate the y limits for the plot later on
     maxy <- max(measured,modeled)*1.1
     miny <- min(modeled-measured)*1.1
     
+    # create paths for plots
     path1 <- paste("../Results/Plots/", catchment, "_LSTM_ts.pdf", sep = "")
+    path2 <- paste("../Results/Plots/", catchment, "_LSTM_QQplot.pdf", sep = "")
   
+    # Plot the measured discharge, modeled discharge, both means and the model error and save it to a pdf file
     pdf(file = path1, width = 14, height = 7)
     plot(measured, type = "l", col="blue", ylim = c(miny,maxy), 
          main = paste(catchment, "LSTM"), ylab = "Discharge")
@@ -1389,6 +1439,13 @@ analyze_model <- function(measured,
     legend("topright", legend = c("model", "data", "model error"), bty = "n", 
            lty = 1, col = c("chartreuse4", "blue", "red"))
     dev.off()
+    
+    # create a QQ Plot
+    pdf(file = path2)
+    qqplot(x=measured,y=modeled, xlab = "Measured", ylab = "Modeled", main = paste(catchment, "LSTM", "QQ Plot"))
+    lines(x=c(0,2000), y=c(0,2000))
+    dev.off()
+    
   }
   
   if(mod_type=="gru") {
@@ -1397,10 +1454,10 @@ analyze_model <- function(measured,
     skip <- length(modeled)-length(measured)
     measured <- tail(measured, n = skip)
     
-    # transform the modeled data back
-    modeled <- modeled*unscale[1]+unscale[2]
+    # transform the modeled data back depending on the variant used to transform them
+    modeled <- trans_back(modeled, unscale = c(unscale[1],unscale[2]), variant = unscale[3])
     
-    # calculate statistics
+    # calculate some model quality measures
     rmse <- round(sqrt(mean((modeled-measured)^2)), digits = 2)
     mod_mean <- round(mean(modeled), digits = 2)
     measured_mean <- round(mean(measured), digits = 2)
@@ -1410,13 +1467,17 @@ analyze_model <- function(measured,
     measured_low5 <- round(quantile(x = measured, probs = 0.05), digits = 2)
     mod_nse <- round(NSE(sim = as.matrix(modeled), obs = as.matrix(measured)), digits = 3)
     mod_kge <- round(KGE(sim = as.matrix(modeled), obs = as.matrix(measured)),digits = 3)
+    corre <- round(cor(x=measured, y=modeled),digits = 3)
     
-    
+    # Calculate the y limits for the plot later on
     maxy <- max(measured,modeled)*1.1
     miny <- min(modeled-measured)*1.1
     
+    # creates path for plots
     path1 <- paste("../Results/Plots/", catchment, "_GRU_ts.pdf", sep = "")
+    path2 <- paste("../Results/Plots/", catchment, "_GRU_QQplot.pdf", sep = "")
     
+    # Plot the measured discharge, modeled discharge, both means and the model error and save it to a pdf file
     pdf(file = path1, width = 14, height = 7)
     plot(measured, type = "l", col="blue", ylim = c(miny,maxy), 
          main = paste(catchment, "GRU"), ylab = "Discharge")
@@ -1428,14 +1489,21 @@ analyze_model <- function(measured,
     legend("topright", legend = c("model", "data", "model error"), bty = "n", 
            lty = 1, col = c("chartreuse4", "blue", "red"))
     dev.off()
+    
+    # create a QQ Plot
+    pdf(file = path2)
+    qqplot(x=measured,y=modeled, xlab = "Measured", ylab = "Modeled", main = paste(catchment, "GRU", "QQ Plot"))
+    lines(x=c(0,2000), y=c(0,2000))
+    dev.off()
+    
   }
   
   if(mod_type=="mlp") {
     
-    # transform the modeled data back
-    modeled <- modeled*unscale[1]+unscale[2]
+    # transform the modeled data back depending on the variant used to transform them
+    modeled <- trans_back(x=modeled, unscale = c(unscale[1],unscale[2]), variant = unscale[3])
     
-    # calculate statistics
+    # calculate some model quality measures
     rmse <- round(sqrt(mean((modeled-measured)^2)), digits = 2)
     mod_mean <- round(mean(modeled), digits = 2)
     measured_mean <- round(mean(measured), digits = 2)
@@ -1445,13 +1513,17 @@ analyze_model <- function(measured,
     measured_low5 <- round(quantile(x = measured, probs = 0.05), digits = 2)
     mod_nse <- round(NSE(sim = as.matrix(modeled), obs = as.matrix(measured)), digits = 3)
     mod_kge <- round(KGE(sim = as.matrix(modeled), obs = as.matrix(measured)),digits = 3)
+    corre <- round(cor(x=measured, y=modeled),digits = 3)
     
-    
+    # Calculate the y limits for the plot later on
     maxy <- max(measured,modeled)*1.1
     miny <- min(modeled-measured)*1.1
     
+    # create paths for plots
     path1 <- paste("../Results/Plots/", catchment, "_MLP_ts.pdf", sep = "")
+    path2 <- paste("../Results/Plots/", catchment, "_MLP_QQplot.pdf", sep = "")
     
+    # Plot the measured discharge, modeled discharge, both means and the model error and save it to a pdf file
     pdf(file = path1, width = 14, height = 7)
     plot(measured, type = "l", col="blue", ylim = c(miny,maxy), 
          main = paste(catchment, "MLP"), ylab = "Discharge")
@@ -1463,10 +1535,18 @@ analyze_model <- function(measured,
     legend("topright", legend = c("model", "data", "model error"), bty = "n", 
            lty = 1, col = c("chartreuse4", "blue", "red"))
     dev.off()
+    
+    # create a QQ Plot
+    pdf(file = path2)
+    qqplot(x=measured,y=modeled, xlab = "Measured", ylab = "Modeled", main = paste(catchment, "MLP", "QQ Plot"))
+    lines(x=c(0,2000), y=c(0,2000))
+    dev.off()
+    
   }
   
-  if(mod_type=="svmr"){
+  if(mod_type=="svr"){
     
+    # calculate some model quality measures
     rmse <- round(sqrt(mean((modeled-measured)^2)), digits = 2)
     mod_mean <- round(mean(modeled), digits = 2)
     measured_mean <- round(mean(measured), digits = 2)
@@ -1476,15 +1556,20 @@ analyze_model <- function(measured,
     measured_low5 <- round(quantile(x = measured, probs = 0.05), digits = 2)
     mod_nse <- round(NSE(sim = as.matrix(modeled), obs = as.matrix(measured)), digits = 3)
     mod_kge <- round(KGE(sim = as.matrix(modeled), obs = as.matrix(measured)),digits = 3)
+    corre <- round(cor(x=measured, y=modeled),digits = 3)
     
-    
+    # Calculate the y limits for the plot later on
     maxy <- max(measured,modeled)*1.1
     miny <- min(modeled-measured)*1.1
-    path1 <- paste("../Results/Plots/", catchment, "_SVMRegression_ts.pdf", sep = "")
     
+    # create paths for plots
+    path1 <- paste("../Results/Plots/", catchment, "_SVRegression_ts.pdf", sep = "")
+    path2 <- paste("../Results/Plots/", catchment, "_SVRegression_QQplot.pdf", sep = "")
+    
+    # Plot the measured discharge, modeled discharge, both means and the model error and save it to a pdf file
     pdf(file = path1, width = 14, height = 7)
     plot(measured, type = "l", col="blue", ylim = c(miny,maxy), 
-         main = paste(catchment, "SVMRegression"), ylab = "Discharge")
+         main = paste(catchment, "SVRegression"), ylab = "Discharge")
     lines(modeled, col="chartreuse4")
     lines(modeled-measured, col="red")
     abline(h=0)
@@ -1494,11 +1579,18 @@ analyze_model <- function(measured,
            lty = 1, col = c("chartreuse4", "blue", "red"))
     dev.off()
     
+    # create a QQ Plot
+    pdf(file = path2)
+    qqplot(x=measured,y=modeled, xlab = "Measured", ylab = "Modeled", main = paste(catchment, "SVR", "QQ Plot"))
+    lines(x=c(0,2000), y=c(0,2000))
+    dev.off()
+    
   }
   
   
   if(mod_type=="lm"){
     
+    # calculate some model quality measures
     rmse <- round(sqrt(mean((modeled-measured)^2)), digits = 2)
     mod_mean <- round(mean(modeled), digits = 2)
     measured_mean <- round(mean(measured), digits = 2)
@@ -1508,12 +1600,17 @@ analyze_model <- function(measured,
     measured_low5 <- round(quantile(x = measured, probs = 0.05), digits = 2)
     mod_nse <- round(NSE(sim = as.matrix(modeled), obs = as.matrix(measured)), digits = 3)
     mod_kge <- round(KGE(sim = as.matrix(modeled), obs = as.matrix(measured)),digits = 3)
+    corre <- round(cor(x=measured, y=modeled),digits = 3)
     
-    
+    # Calculate the y limits for the plot later on
     maxy <- max(measured,modeled)*1.1
     miny <- min(modeled-measured)*1.1
-    path1 <- paste("../Results/Plots/", catchment, "_LM_ts.pdf", sep = "")
     
+    # create paths for plots
+    path1 <- paste("../Results/Plots/", catchment, "_LM_ts.pdf", sep = "")
+    path2 <- paste("../Results/Plots/", catchment, "_LM_QQplot.pdf", sep = "")
+    
+    # Plot the measured discharge, modeled discharge, both means and the model error and save it to a pdf file
     pdf(file = path1, width = 14, height = 7)
     plot(measured, type = "l", col="blue", ylim = c(miny,maxy), 
          main = paste(catchment, "LM"), ylab = "Discharge")
@@ -1526,8 +1623,15 @@ analyze_model <- function(measured,
            lty = 1, col = c("chartreuse4", "blue", "red"))
     dev.off()
     
+    # create a QQ Plot
+    pdf(file = path2)
+    qqplot(x=measured,y=modeled, xlab = "Measured", ylab = "Modeled", main = paste(catchment, "LM", "QQ Plot"))
+    lines(x=c(0,2000), y=c(0,2000))
+    dev.off()
+    
   }
   
+  # write the model quality measures to a text file
   cat("\n",catchment, ";",
       mod_type, ";",
       rmse, ";",
@@ -1538,11 +1642,13 @@ analyze_model <- function(measured,
       mod_top5, ";",
       measured_top5, ";",
       mod_low5, ";",
-      measured_low5, 
+      measured_low5, ";",
+      corre,
       file = "../Results/Models/model_stat.txt",
       append = TRUE,
       sep = "")
   
+  # if the model is an ANN model returns a data frame with the back transformed modeled data
   if (mod_type == "lstm" | mod_type == "gru" | mod_type == "mlp") {
     return(modeled)
   }

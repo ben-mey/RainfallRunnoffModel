@@ -519,40 +519,24 @@ monthly_plot(data = mon_mean,
              main = paste(catchment, "XGBoost"))
 dev.off()
 
-# maxy <- max(pxgb1,p.data$data[valid,1])*1.1
-# miny <- min(pxgb1-p.data$data[valid,1])*1.1
-# 
-# rmse(p.data$data[valid,1], pxgb1)
-# plot(p.data$data[valid,1], type = "l", col="blue", ylim = c(miny,maxy), main = "main", ylab = "Discharge")
-# lines(pxgb1, col="green")
-# lines(pxgb1-p.data$data[valid,1], col="red")
-# abline(h=0)
-# legend("topright", legend = c("model", "data", "model - data"), bty = "n", 
-#        lty = 1, col = c("green", "blue", "red"))
-# 
-# mean(pxgb1)
-# mean(h.data$discharge_vol.m3.s.[valid2])
-# NSE(sim = as.matrix(pxgb1), obs = as.matrix(h.data$discharge_vol.m3.s.[valid2]))
-# KGE(sim = as.matrix(pxgb1), obs = as.matrix(h.data$discharge_vol.m3.s.[valid2]))
-# 
-# xgb.plot.deepness(xgb_mod[[2]])
-# xgb.plot.importance(xgb.importance(model=xgb_mod[[2]]))
-# xgb.plot.shap.summary(data=as.matrix(h.data[calib.h,-c(1,2)]), model=xgb_mod)
+quantile(x=pxgb1, probs = ((1:100)/100))
+quantile(x=p.data$data$discharge[valid], probs = ((1:100)/100))
 
 
 
 
-h.mean <- lapply(p.data$data, FUN = "mean",2, na.rm = TRUE)
-h.sd <- lapply(p.data$data, FUN = "sd",2)
-h.data.scale <- scale(p.data$data, center = TRUE)
-
+# h.mean <- lapply(p.data$data, FUN = "mean",2, na.rm = TRUE)
+# h.sd <- lapply(p.data$data, FUN = "sd",2)
+min <- min(p.data$data$discharge)
+max <- max(p.data$data$discharge)
+h.data.scale <- normalize(p.data$data, variant = "stdnorm")
 
 
 lstm_mod2 <- bayes_opt_LSTM(x = h.data.scale[calib,-1], 
                             y = h.data.scale[calib,1], 
                             epochs_opt = 15, 
                             initPoints = 25
-                            , duplicate = c(0.05, 0.85, 1)
+                            , duplicate = c(0.05, 0.95, 1)
                             , validation_split = 0.8
                             )
 lstm_mod2$bayes_summary
@@ -565,18 +549,17 @@ h.data.lstm_val <- dataPrepLSTM(x = h.data.scale[valid,-1],
                                 timesteps = lstm_mod2$optimized_param$timesteps)
 
 
-wushu <- p.data$data$discharge[valid]
-wushu <- wushu[-(1:lstm_mod2$optimized_param$timesteps-1)]
+
 pre_lstm <- predict(object = lstm_mod2$optimized_mod, x = h.data.lstm_val$x)
 
 
-me <- mean(p.data$data$discharge)
 std <- sd(p.data$data$discharge)
+mean <- mean(p.data$data$discharge)
 pre_lstm_unscaled <-  analyze_model(measured = p.data$data$discharge[valid],
                                     modeled = pre_lstm,
                                     catchment = catchment,
                                     mod_type = "lstm",
-                                    unscale = c(std,me))
+                                    unscale = c(std,mean,"stdnorm"))
 
 mon_mean <- monthly_mean(measured = p.data$data$discharge[valid],
                          modeled = pre_lstm_unscaled,
@@ -587,23 +570,12 @@ monthly_plot(data = mon_mean,
              main = paste(catchment, "LSTM"))
 dev.off()
 
-summary(lstm_mod2$optimized_mod)
-# me <- mean(p.data$data$discharge)
-# std <- sd(p.data$data$discharge)
-# rmse(wushu,pre_lstm*std+me) # 2040 *50.3518+46.78827  2020 *60.357+65.206 [9142:14610]
-# 
-# maxy <- max(pre_lstm*std+me,wushu)
-# miny <- min(pre_lstm*std+me-wushu)
-# plot(wushu, type = "l", col = "blue", ylim = c(miny*1.1,maxy*1.1))
-# lines(pre_lstm*std+me, col = "green")
-# lines(pre_lstm*std+me-wushu, col = "red")
-# abline(h=0)
-# 
-# mean(pre_lstm*std+me)
-# mean(wushu)
-# NSE(sim = as.matrix(pre_lstm*std+me), obs = as.matrix(wushu))
-# KGE(sim = as.matrix(pre_lstm*std+me), obs = as.matrix(wushu))
 
+
+summary(lstm_mod2$optimized_mod)
+
+quantile(x=pre_lstm_unscaled, probs = ((1:100)/100))
+quantile(x=p.data$data$discharge[valid], probs = ((1:100)/100))
 
 
 
@@ -634,32 +606,18 @@ monthly_plot(data = mon_mean,
              main = paste(catchment, "LightGBM"))
 dev.off()
 
+quantile(x=plgbm, probs = ((1:100)/100))
+quantile(x=p.data$data$discharge[valid], probs = ((1:100)/100))
 
 
-# maxy <- max(plgbm,p.data$data$discharge[valid])*1.1
-# miny <- min(plgbm-p.data$data$discharge[valid])*1.1
-# 
-# rmse(p.data$data$discharge[valid], plgbm)
-# plot(p.data$data$discharge[valid], type = "l", col="blue", ylim = c(miny,maxy), main = "main", ylab = "Discharge")
-# lines(plgbm, col="green")
-# lines(plgbm-p.data$data$discharge[valid], col="red")
-# abline(h=0)
-# legend("topright", legend = c("model", "data", "model - data"), bty = "n", 
-#        lty = 1, col = c("darkgreen", "blue", "red"))
-# 
-# mean(plgbm)
-# mean(p.data$data$discharge[valid])
-# NSE(sim = as.matrix(plgbm), obs = as.matrix(p.data$data$discharge[valid]))
-# KGE(sim = as.matrix(plgbm), obs = as.matrix(p.data$data$discharge[valid]))
-# 
-# 
-# lgb.plot.importance(lgb.importance(model=lgbm_mod$optimized_mod),top_n = 15)
 
 
-h.mean <- lapply(p.data$data, FUN = "mean",2, na.rm = TRUE)
-h.sd <- lapply(p.data$data, FUN = "sd",2)
-h.data.scale <- scale(p.data$data, center = TRUE)
-# h.data.scale.mm <- normalize(p.data$data)
+
+
+# h.mean <- lapply(p.data$data, FUN = "mean",2, na.rm = TRUE)
+# h.sd <- lapply(p.data$data, FUN = "sd",2)
+# h.data.scale <- scale(p.data$data, center = TRUE)
+h.data.scale <- normalize(p.data$data)
 
 
 
@@ -685,13 +643,13 @@ h.data.gru_val <- dataPrepLSTM(x = h.data.scale[valid,-1],
 pre_gru <- predict(object = gru_mod2$optimized_mod, x = h.data.gru_val$x)
 
 
-me <- mean(p.data$data$discharge)
 std <- sd(p.data$data$discharge)
+mean <- mean(p.data$data$discharge)
 pre_gru_unscaled <-  analyze_model(measured = p.data$data$discharge[valid],
                                     modeled = pre_gru,
                                     catchment = catchment,
                                     mod_type = "gru",
-                                    unscale = c(std,me))
+                                    unscale = c(std,mean,"stdnorm"))
 
 mon_mean <- monthly_mean(measured = p.data$data$discharge[valid],
                          modeled = pre_gru_unscaled,
@@ -702,34 +660,18 @@ monthly_plot(data = mon_mean,
              main = paste(catchment, "GRU"))
 dev.off()
 
-
-u_gru <- trans_back(pre_gru, min = min(p.data$data$discharge), max = max(p.data$data$discharge))
-wushu <- p.data$data$discharge[valid]
-wushu <- wushu[-(1:gru_mod2$optimized_param$timesteps-1)]
-rmse(wushu,u_gru) 
-
-maxy <- max(u_gru,wushu)
-miny <- min(u_gru-wushu)
-plot(wushu, type = "l", col = "blue", ylim = c(miny*1.1,maxy*1.1))
-lines(u_gru, col = "green")
-lines(u_gru-wushu, col = "red")
-abline(h=0)
-
-mean(u_gru)
-mean(wushu)
-NSE(sim = as.matrix(u_gru), obs = as.matrix(wushu))
-KGE(sim = as.matrix(u_gru), obs = as.matrix(wushu))
-
-
+quantile(x=pre_gru_unscaled, probs = ((1:100)/100))
+quantile(x=p.data$data$discharge[valid], probs = ((1:100)/100))
 
 
 ######################
 
 # Ticino (0.05,0.9,2)
 
-h.mean <- lapply(p.data$data, FUN = "mean",2, na.rm = TRUE)
-h.sd <- lapply(p.data$data, FUN = "sd",2)
-h.data.scale <- scale(p.data$data, center = TRUE)
+# h.mean <- lapply(p.data$data, FUN = "mean",2, na.rm = TRUE)
+# h.sd <- lapply(p.data$data, FUN = "sd",2)
+# h.data.scale <- scale(p.data$data, center = TRUE)
+h.data.scale <- normalize(p.data$data)
 
 h.calib <- h.data.scale[calib,]
 filt.max <- h.calib[,1] > quantile(x = h.calib[,1], probs = 0.9)
@@ -756,13 +698,13 @@ save(mlp_mod2, file = paste("../Results/Models/", catchment, "_MLP.RData", sep =
 pre_mlp <- predict(object = mlp_mod2$optimized_mod, x = h.data.scale[valid,-1])
 
 
-me <- mean(p.data$data$discharge)
 std <- sd(p.data$data$discharge)
+mean <- mean(p.data$data$discharge)
 pre_nn_unscaled <-  analyze_model(measured = p.data$data$discharge[valid],
                                     modeled = pre_mlp,
                                     catchment = catchment,
                                     mod_type = "mlp",
-                                    unscale = c(std,me))
+                                    unscale = c(std,mean,"stdnorm"))
 
 mon_mean <- monthly_mean(measured = p.data$data$discharge[valid],
                          modeled = pre_nn_unscaled,
@@ -773,6 +715,8 @@ monthly_plot(data = mon_mean,
              main = paste(catchment, "MLP"))
 dev.off()
 
+quantile(x=pre_nn_unscaled, probs = ((1:100)/100))
+quantile(x=p.data$data$discharge[valid], probs = ((1:100)/100))
 
 #######################
 
@@ -780,32 +724,33 @@ dev.off()
 # Massa:  x = p.data$data[calib,c(3,4,10:12,17,23:31)]
 # Ticino: x = p.data$data[calib,c(3,4,11,19:21,23:31)]
 
-svmr_mod2 <- bayes_opt_SVMR(x = p.data$data[calib,c(3,4,11,19:21,23:31)], 
+svr_mod2 <- bayes_opt_SVR(x = p.data$data[calib,c(3,4,11,19:21,23:31)], 
                             y = p.data$data[calib,1], 
                             cross = 4)
-svmr_mod2$bayes_summary
-# svmr_thur <- svmr_mod2
-save(svmr_mod2, file = paste("../Results/Models/", catchment, "_SVMR.RData", sep = ""))
-psvmr <- predict(object = svmr_mod2$optimized_mod, newdata = p.data$data[valid,c(3,4,11,19:21,23:31)])
+svr_mod2$bayes_summary
+# svr_thur <- svr_mod2
+save(svr_mod2, file = paste("../Results/Models/", catchment, "_SVR.RData", sep = ""))
+psvr <- predict(object = svr_mod2$optimized_mod, newdata = p.data$data[valid,c(3,4,11,19:21,23:31)])
 
 
 
 analyze_model(measured = p.data$data$discharge[valid],
-              modeled = psvmr,
+              modeled = psvr,
               catchment = catchment,
-              mod_type = "svmr",
-              model = svmr_mod2[[2]])
+              mod_type = "svr",
+              model = svr_mod2[[2]])
 
 mon_mean <- monthly_mean(measured = p.data$data$discharge[valid],
-                         modeled = psvmr,
+                         modeled = psvr,
                          date = p.data$date[valid])
 
-pdf(file = paste("../Results/Plots/", catchment, "_SVMRegression_monthly.pdf", sep = ""))
+pdf(file = paste("../Results/Plots/", catchment, "_SVRegression_monthly.pdf", sep = ""))
 monthly_plot(data = mon_mean,
-             main = paste(catchment, "SVMRegression"))
+             main = paste(catchment, "SVRegression"))
 dev.off()
 
-
+quantile(x=psvr, probs = ((1:100)/100))
+quantile(x=p.data$data$discharge[valid], probs = ((1:100)/100))
 
 
 ######################
