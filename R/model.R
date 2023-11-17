@@ -809,3 +809,32 @@ pdf(file = "../Results/Plots/Massa_LMRegression_monthly.pdf")
 monthly_plot(data = mon_mean,
              main = "Massa LMRegression")
 dev.off()
+
+
+afx <- seq(-6,6,0.05)
+sigm <- sigmoid(afx)
+th <- tanh(afx)
+relu <- pmax(afx,0)
+softplus <- log(1+exp(afx))
+
+
+
+
+plot(x=afx, y=sigm, type = "l", xlab = "X", ylab = "Y")
+abline(h=0)
+abline(v=0)
+
+
+plot(x=afx, y=th, type = "l", xlab = "X", ylab = "Y")
+abline(h=0)
+abline(v=0)
+
+
+plot(x=afx, y=relu, type = "l", xlab = "X", ylab = "Y")
+abline(h=0)
+abline(v=0)
+
+
+plot(x=afx, y=softplus, type = "l", xlab = "X", ylab = "Y")
+abline(h=0)
+abline(v=0)

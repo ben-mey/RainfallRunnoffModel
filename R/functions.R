@@ -392,7 +392,7 @@ bayes_opt_xgb <- function(data,
                          nrounds = 250,
                          nfold = 5,
                          epochs_opt = 15,
-                         initPoints= 20){
+                         initPoints= 25){
   
   time1 <- as.numeric(Sys.time())
   
@@ -686,7 +686,7 @@ bayes_opt_LSTM <- function(x,
                          epochs_lstm = 200,
                          earlystop = 8,
                          validation_split = 0.25,
-                         initPoints = 20,
+                         initPoints = 25,
                          epochs_opt = 15,
                          duplicate = FALSE){
   
@@ -864,7 +864,7 @@ bayes_opt_GRU <- function(x,
                            epochs_gru = 200,
                            earlystop = 8,
                            validation_split = 0.25,
-                           initPoints = 20,
+                           initPoints = 25,
                            epochs_opt = 15,
                            duplicate = FALSE){
   
@@ -997,7 +997,7 @@ create_MLP <- function(layers,
   output <- output %>% layer_dense(units = 1)
   model <- keras_model(input, output) %>%
     keras::compile(loss = "mse",
-                   optimizer = "adam")  
+                   optimizer = "adam")  #"sdg" "adam"
   return(model)
 }
 
@@ -1036,7 +1036,7 @@ bayes_opt_MLP <- function(x,
                           epochs_mlp = 200,
                           earlystop = 8,
                           validation_split = 0.25,
-                          initPoints = 20,
+                          initPoints = 25,
                           epochs_opt = 15,
                           duplicate = FALSE,
                           activation = "softmax"){
@@ -1146,7 +1146,7 @@ bayes_opt_SVR <- function(x,
                            y,
                            epsilon = c(0.01,0.6),
                            cost = c(1L,25L),
-                           initPoints = 18,
+                           initPoints = 20,
                            epochs_opt = 10,
                            cross = 4){
   
@@ -1343,7 +1343,9 @@ analyze_model <- function(measured,
     
     # create a QQ Plot
     pdf(file = path3)
-    qqplot(x=measured,y=modeled, xlab = "Measured", ylab = "Modeled", main = paste(catchment, "XGBoost", "QQ Plot"))
+    plot(x=quantile(x=measured, probs = ((1:100)/100)),
+         y=quantile(x=modeled, probs = ((1:100)/100)), 
+         xlab = "Measured", ylab = "Modeled", main = paste(catchment, "XGBoost", "QQ Plot"))
     lines(x=c(0,2000), y=c(0,2000))
     dev.off()
     
@@ -1392,7 +1394,9 @@ analyze_model <- function(measured,
     
     # create a QQ Plot
     pdf(file = path3)
-    qqplot(x=measured,y=modeled, xlab = "Measured", ylab = "Modeled", main = paste(catchment, "LightGBM", "QQ Plot"))
+    plot(x=quantile(x=measured, probs = ((1:100)/100)),
+         y=quantile(x=modeled, probs = ((1:100)/100)), 
+         xlab = "Measured", ylab = "Modeled", main = paste(catchment, "LightGBM", "QQ Plot"))
     lines(x=c(0,2000), y=c(0,2000))
     dev.off()
     
@@ -1442,7 +1446,9 @@ analyze_model <- function(measured,
     
     # create a QQ Plot
     pdf(file = path2)
-    qqplot(x=measured,y=modeled, xlab = "Measured", ylab = "Modeled", main = paste(catchment, "LSTM", "QQ Plot"))
+    plot(x=quantile(x=measured, probs = ((1:100)/100)),
+         y=quantile(x=modeled, probs = ((1:100)/100)), 
+         xlab = "Measured", ylab = "Modeled", main = paste(catchment, "LSTM", "QQ Plot"))
     lines(x=c(0,2000), y=c(0,2000))
     dev.off()
     
@@ -1492,7 +1498,9 @@ analyze_model <- function(measured,
     
     # create a QQ Plot
     pdf(file = path2)
-    qqplot(x=measured,y=modeled, xlab = "Measured", ylab = "Modeled", main = paste(catchment, "GRU", "QQ Plot"))
+    plot(x=quantile(x=measured, probs = ((1:100)/100)),
+         y=quantile(x=modeled, probs = ((1:100)/100)), 
+         xlab = "Measured", ylab = "Modeled", main = paste(catchment, "GRU", "QQ Plot"))
     lines(x=c(0,2000), y=c(0,2000))
     dev.off()
     
@@ -1538,7 +1546,9 @@ analyze_model <- function(measured,
     
     # create a QQ Plot
     pdf(file = path2)
-    qqplot(x=measured,y=modeled, xlab = "Measured", ylab = "Modeled", main = paste(catchment, "MLP", "QQ Plot"))
+    plot(x=quantile(x=measured, probs = ((1:100)/100)),
+         y=quantile(x=modeled, probs = ((1:100)/100)), 
+         xlab = "Measured", ylab = "Modeled", main = paste(catchment, "MLP", "QQ Plot"))
     lines(x=c(0,2000), y=c(0,2000))
     dev.off()
     
@@ -1581,7 +1591,9 @@ analyze_model <- function(measured,
     
     # create a QQ Plot
     pdf(file = path2)
-    qqplot(x=measured,y=modeled, xlab = "Measured", ylab = "Modeled", main = paste(catchment, "SVR", "QQ Plot"))
+    plot(x=quantile(x=measured, probs = ((1:100)/100)),
+         y=quantile(x=modeled, probs = ((1:100)/100)), 
+         xlab = "Measured", ylab = "Modeled", main = paste(catchment, "SVR", "QQ Plot"))
     lines(x=c(0,2000), y=c(0,2000))
     dev.off()
     
@@ -1625,7 +1637,9 @@ analyze_model <- function(measured,
     
     # create a QQ Plot
     pdf(file = path2)
-    qqplot(x=measured,y=modeled, xlab = "Measured", ylab = "Modeled", main = paste(catchment, "LM", "QQ Plot"))
+    plot(x=quantile(x=measured, probs = ((1:100)/100)),
+         y=quantile(x=modeled, probs = ((1:100)/100)), 
+         xlab = "Measured", ylab = "Modeled", main = paste(catchment, "LM", "QQ Plot"))
     lines(x=c(0,2000), y=c(0,2000))
     dev.off()
     
