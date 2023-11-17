@@ -1,8 +1,8 @@
 ##########################################
 ##########################################
 
-# Custom functions used for data preparation and model optimization
-# to keep the main script clean and understandable
+# Custom functions used for data preparation, model optimization, interpretation, and plots
+# to keep the main script clean and readable
 
 
 
