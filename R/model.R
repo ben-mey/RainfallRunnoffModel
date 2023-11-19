@@ -527,17 +527,17 @@ quantile(x=p.data$data$discharge[valid], probs = ((1:100)/100))
 
 # h.mean <- lapply(p.data$data, FUN = "mean",2, na.rm = TRUE)
 # h.sd <- lapply(p.data$data, FUN = "sd",2)
-min <- min(p.data$data$discharge)
-max <- max(p.data$data$discharge)
+# min <- min(p.data$data$discharge)
+# max <- max(p.data$data$discharge)
 h.data.scale <- normalize(p.data$data, variant = "stdnorm")
 
 
 lstm_mod2 <- bayes_opt_LSTM(x = h.data.scale[calib,-1], 
                             y = h.data.scale[calib,1], 
                             epochs_opt = 15, 
-                            initPoints = 25
-                            , duplicate = c(0.05, 0.95, 1)
-                            , validation_split = 0.8
+                            initPoints = 30,
+                            duplicate = c(0.05, 0.95, 2),
+                            validation_split = 0.2
                             )
 lstm_mod2$bayes_summary
 
@@ -627,7 +627,7 @@ gru_mod2 <- bayes_opt_GRU(x = h.data.scale[calib,-1],
                             epochs_opt = 15, 
                             initPoints = 20
                             , duplicate = c(0.1, 0.9,1)
-                            , validation_split = 0.8
+                            , validation_split = 0.25
                         )
 gru_mod2$bayes_summary
 
@@ -687,7 +687,7 @@ for (t in 1:2) {
 
 mlp_mod2 <- bayes_opt_MLP(x = h.calib[,-1], 
                           y = h.calib[,1], 
-                          validation_split = 0.8)
+                          validation_split = 0.2)
 mlp_mod2$bayes_summary
 
 # mlp_thur <- mlp_mod2

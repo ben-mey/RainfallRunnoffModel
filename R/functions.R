@@ -513,15 +513,15 @@ bayes_opt_xgb <- function(data,
 # @ initPoints:       number of initial points calculated for Bayesian optimization
 
 bayes_opt_lgb <- function(data, 
-                         label, 
-                         max_depth = c(2L,15L), 
-                         eta = c(0.001,0.25),
-                         num_leaves = c(2L,120L),
-                         min_data_in_leaf = c(5L,50L),
-                         nrounds = 200,
-                         nfold = 5,
-                         epochs_opt = 15,
-                         initPoints = 20){
+                          label, 
+                          max_depth = c(2L,15L), 
+                          eta = c(0.001,0.25),
+                          num_leaves = c(2L,120L),
+                          min_data_in_leaf = c(5L,50L),
+                          nrounds = 200,
+                          nfold = 5,
+                          epochs_opt = 15,
+                          initPoints = 20){
   
   time1 <- as.numeric(Sys.time())
   
@@ -620,9 +620,12 @@ bayes_opt_lgb <- function(data,
 # @ timesteps:  time step size of the input data
 # @ n_features: number of features used (x variables)
 
-create_LSTM <- function(layers, units, dropout,
-                         timesteps,
-                         n_features){
+create_LSTM <- function(layers, 
+                        units, 
+                        dropout,
+                        timesteps,
+                        n_features,
+                        learningr = 0.001){
   
   
   input <- layer_input(shape = c(timesteps, n_features))
@@ -649,7 +652,7 @@ create_LSTM <- function(layers, units, dropout,
   output <- output %>% layer_dense(1)
   model <- keras_model(input, output) %>%
     keras::compile(loss = "mse",
-                   optimizer = "adam")  
+                   optimizer = optimizer_adagrad(learning_rate = learningr))  
   return(model)
 }
 
@@ -681,22 +684,23 @@ create_LSTM <- function(layers, units, dropout,
 #                     ex.: c(max,0.9,1); c(min,0.1,1) adds the highest/lowest 10% of the values 1 time
 
 bayes_opt_LSTM <- function(x, 
-                         y, 
-                         layers = c(1L,5L), 
-                         units = c(5L,150L),
-                         dropout = c(0,0.4),
-                         batchsize = c(5L,100L),
-                         timesteps = c(5L,100L),
-                         epochs_lstm = 200,
-                         earlystop = 8,
-                         validation_split = 0.25,
-                         initPoints = 30,
-                         epochs_opt = 15,
-                         duplicate = FALSE){
+                           y, 
+                           layers = c(1L,5L), 
+                           units = c(5L,150L),
+                           dropout = c(0,0.4),
+                           batchsize = c(5L,150L),
+                           timesteps = c(5L,100L),
+                           epochs_lstm = 200,
+                           learningr = c(0.001,0.015),
+                           earlystop = 8,
+                           validation_split = 0.25,
+                           initPoints = 30,
+                           epochs_opt = 15,
+                           duplicate = FALSE){
   
   time1 <- as.numeric(Sys.time())
   
-  obj_func <- function(layers, units, dropout, batchsize, timesteps) { 
+  obj_func <- function(layers, units, dropout, batchsize, timesteps, learningr) { 
     
    train.data <- dataPrepLSTM(x = x, y = y, timesteps = timesteps, duplicate = duplicate)
       
@@ -705,6 +709,7 @@ bayes_opt_LSTM <- function(x,
                             units = units,
                             dropout = dropout,
                             timesteps = timesteps,
+                            learningr = learningr,
                             n_features = dim(train.data$x)[3])
     
     history_lstm <- fit(object = mod.lstm, 
@@ -734,7 +739,8 @@ bayes_opt_LSTM <- function(x,
                  units = units, 
                  dropout = dropout, 
                  batchsize = batchsize, 
-                 timesteps = timesteps)
+                 timesteps = timesteps,
+                 learningr = learningr)
   
   
   set.seed(1234)
@@ -757,6 +763,7 @@ bayes_opt_LSTM <- function(x,
                          units = opt_params$units,
                          dropout = opt_params$dropout,
                          timesteps = opt_params$timesteps,
+                         learningr = opt_params$learningr,
                          n_features = dim(opt_data$x)[3])
   
   
@@ -800,9 +807,12 @@ bayes_opt_LSTM <- function(x,
 # @ timesteps:  time step size of the input data
 # @ n_features: number of features used (x variables)
 
-create_GRU <- function(layers, units, dropout,
-                        timesteps,
-                        n_features){
+create_GRU <- function(layers, 
+                       units, 
+                       dropout,
+                       timesteps,
+                       learningr = 0.001,
+                       n_features){
   
   
   input <- layer_input(shape = c(timesteps, n_features))
@@ -827,7 +837,7 @@ create_GRU <- function(layers, units, dropout,
   output <- output %>% layer_dense(1)
   model <- keras_model(input, output) %>%
     keras::compile(loss = "mse",
-                   optimizer = "adam")  
+                   optimizer = optimizer_adam(learning_rate = learningr))  
   return(model)
 }
 
@@ -859,31 +869,33 @@ create_GRU <- function(layers, units, dropout,
 #                     ex.: c(max,0.9,1); c(min,0.1,1) adds the highest/lowest 10% of the values 1 time
 
 bayes_opt_GRU <- function(x, 
-                           y, 
-                           layers = c(1L,5L), 
-                           units = c(5L,150L),
-                           dropout = c(0,0.4),
-                           batchsize = c(5L,100L),
-                           timesteps = c(5L,100L),
-                           epochs_gru = 200,
-                           earlystop = 8,
-                           validation_split = 0.25,
-                           initPoints = 30,
-                           epochs_opt = 15,
-                           duplicate = FALSE){
+                          y, 
+                          layers = c(1L,5L), 
+                          units = c(5L,150L),
+                          dropout = c(0,0.4),
+                          batchsize = c(5L,150L),
+                          timesteps = c(5L,100L),
+                          epochs_gru = 200,
+                          learningr = c(0.001,0.015),
+                          earlystop = 8,
+                          validation_split = 0.25,
+                          initPoints = 30,
+                          epochs_opt = 15,
+                          duplicate = FALSE){
   
   time1 <- as.numeric(Sys.time())
   
-  obj_func <- function(layers, units, dropout, batchsize, timesteps) { 
+  obj_func <- function(layers, units, dropout, batchsize, timesteps, learningr) { 
     
     train.data <- dataPrepLSTM(x = x, y = y, timesteps = timesteps, duplicate = duplicate)
     
     
     mod.lstm <- create_GRU(layers = layers, 
-                            units = units,
-                            dropout = dropout,
-                            timesteps = timesteps,
-                            n_features = dim(train.data$x)[3])
+                           units = units,
+                           dropout = dropout,
+                           timesteps = timesteps,
+                           learningr = learningr,
+                           n_features = dim(train.data$x)[3])
     
     history_gru <- fit(object = mod.lstm, 
                         x=train.data$x, 
@@ -912,7 +924,8 @@ bayes_opt_GRU <- function(x,
                  units = units, 
                  dropout = dropout, 
                  batchsize = batchsize, 
-                 timesteps = timesteps)
+                 timesteps = timesteps,
+                 learningr = learningr)
   
   
   set.seed(1234)
@@ -932,10 +945,11 @@ bayes_opt_GRU <- function(x,
   # create a optimized gru model
   
   opt_mdl <- create_GRU(layers = opt_params$layers, 
-                         units = opt_params$units,
-                         dropout = opt_params$dropout,
-                         timesteps = opt_params$timesteps,
-                         n_features = dim(opt_data$x)[3])
+                        units = opt_params$units,
+                        dropout = opt_params$dropout,
+                        timesteps = opt_params$timesteps,
+                        learningr = opt_params$learningr,
+                        n_features = dim(opt_data$x)[3])
   
   
   # Fit a gru model
@@ -978,10 +992,11 @@ bayes_opt_GRU <- function(x,
 # @ n_features: number of features used (x variables)
 
 create_MLP <- function(layers, 
-                      units, 
-                      dropout,
-                      n_features,
-                      activation = "softplus"){
+                       units, 
+                       dropout,
+                       n_features,
+                       learningr = 0.001,
+                       activation = "softplus"){
   
   
   input <- layer_input(shape = n_features)
@@ -1001,7 +1016,7 @@ create_MLP <- function(layers,
   output <- output %>% layer_dense(units = 1)
   model <- keras_model(input, output) %>%
     keras::compile(loss = "mse",
-                   optimizer = "adam")  #"sdg" "adam"
+                   optimizer = optimizer_adam(learning_rate = learningr))  #"sdg" "adam"
   return(model)
 }
 
@@ -1036,8 +1051,9 @@ bayes_opt_MLP <- function(x,
                           layers = c(1L,5L), 
                           units = c(5L,150L),
                           dropout = c(0,0.4),
-                          batchsize = c(5L,100L),
+                          batchsize = c(5L,150L),
                           epochs_mlp = 200,
+                          learningr = c(0.001,0.015),
                           earlystop = 8,
                           validation_split = 0.25,
                           initPoints = 30,
@@ -1047,12 +1063,13 @@ bayes_opt_MLP <- function(x,
   
   time1 <- as.numeric(Sys.time())
   
-  obj_func <- function(layers, units, dropout, batchsize) { 
+  obj_func <- function(layers, units, dropout, batchsize, learningr) { 
     
     
     mod.mlp <- create_MLP(layers = layers, 
                         units = units,
                         dropout = dropout,
+                        learningr = learningr,
                         n_features = dim(x)[2],
                         activation = activation)
     
@@ -1082,7 +1099,8 @@ bayes_opt_MLP <- function(x,
   bounds <- list(layers = layers, 
                  units = units, 
                  dropout = dropout, 
-                 batchsize = batchsize)
+                 batchsize = batchsize,
+                 learningr = learningr)
   
   
   set.seed(1234)
@@ -1101,6 +1119,8 @@ bayes_opt_MLP <- function(x,
   opt_mdl <- create_MLP(layers = opt_params$layers, 
                         units = opt_params$units,
                         dropout = opt_params$dropout,
+                        learningr = opt_params$learningr,
+                        activation = activation,
                         n_features = dim(x)[2])
   
   
@@ -1483,7 +1503,7 @@ analyze_model <- function(measured,
     dev.off()
     
     # create two QQ Plots next to each other
-    pdf(file = path3, width = 14, height = 7)
+    pdf(file = path2, width = 14, height = 7)
     par(mfrow = c(1, 2))
     # qqplot based on percentiles
     plot(x=quantile(x=measured, probs = ((1:100)/100)),
@@ -1552,7 +1572,7 @@ analyze_model <- function(measured,
     dev.off()
     
     # create two QQ Plots next to each other
-    pdf(file = path3, width = 14, height = 7)
+    pdf(file = path2, width = 14, height = 7)
     par(mfrow = c(1, 2))
     # qqplot based on percentiles
     plot(x=quantile(x=measured, probs = ((1:100)/100)),
@@ -1617,7 +1637,7 @@ analyze_model <- function(measured,
     dev.off()
     
     # create two QQ Plots next to each other
-    pdf(file = path3, width = 14, height = 7)
+    pdf(file = path2, width = 14, height = 7)
     par(mfrow = c(1, 2))
     # qqplot based on percentiles
     plot(x=quantile(x=measured, probs = ((1:100)/100)),
@@ -1679,7 +1699,7 @@ analyze_model <- function(measured,
     dev.off()
     
     # create two QQ Plots next to each other
-    pdf(file = path3, width = 14, height = 7)
+    pdf(file = path2, width = 14, height = 7)
     par(mfrow = c(1, 2))
     # qqplot based on percentiles
     plot(x=quantile(x=measured, probs = ((1:100)/100)),
@@ -1742,7 +1762,7 @@ analyze_model <- function(measured,
     dev.off()
     
     # create two QQ Plots next to each other
-    pdf(file = path3, width = 14, height = 7)
+    pdf(file = path2, width = 14, height = 7)
     par(mfrow = c(1, 2))
     # qqplot based on percentiles
     plot(x=quantile(x=measured, probs = ((1:100)/100)),
