@@ -501,21 +501,23 @@ bayes_opt_xgb <- function(data,
 # Returns a list with the optimized hyper parameter, the optimized model, and a summary of the Bayesian optimization.
 
 
-# @ data:       matrix of predictor variables (x)
-# @ label:      vector with target variable (y)
-# @ max_depth:  vector giving the lower and upper bounds (integers) of optimization of max depth of the trees
-# @ eta:        vector giving the lower and upper bounds of optimization of the learning rate
-# @ num_leaves: vector giving the lower and upper bounds (integers) of optimization of max number of leaves per tree
-# @ nrounds:    maximum number of trees built
-# @ nfold:      number indicating how many fold the cross validation is done
-# @ epochs_opt: number of optimization epochs during Bayesian optimization
-# @ initPoints: number of initial points calculated for Bayesian optimization
+# @ data:             matrix of predictor variables (x)
+# @ label:            vector with target variable (y)
+# @ max_depth:        vector giving the lower and upper bounds (integers) of optimization of max depth of the trees
+# @ eta:              vector giving the lower and upper bounds of optimization of the learning rate
+# @ num_leaves:       vector giving the lower and upper bounds (integers) of optimization of max number of leaves per tree
+# @ min_data_in_leaf: vector giving the lower and upper bounds (integers) of optimization of minimum data points in each leaf
+# @ nrounds:          maximum number of trees built
+# @ nfold:            number indicating how many fold the cross validation is done
+# @ epochs_opt:       number of optimization epochs during Bayesian optimization
+# @ initPoints:       number of initial points calculated for Bayesian optimization
 
 bayes_opt_lgb <- function(data, 
                          label, 
-                         max_depth = c(2L,12L), 
+                         max_depth = c(2L,15L), 
                          eta = c(0.001,0.25),
                          num_leaves = c(2L,120L),
+                         min_data_in_leaf = c(5L,50L),
                          nrounds = 200,
                          nfold = 5,
                          epochs_opt = 15,
@@ -523,7 +525,7 @@ bayes_opt_lgb <- function(data,
   
   time1 <- as.numeric(Sys.time())
   
-  obj_func <- function(eta, max_depth, num_leaves) { 
+  obj_func <- function(eta, max_depth, num_leaves, min_data_in_leaf) { 
     
     param <- list(
       
@@ -531,6 +533,7 @@ bayes_opt_lgb <- function(data,
       eta = eta,
       max_depth = max_depth,
       num_leaves = num_leaves,
+      min_data_in_leaf = min_data_in_leaf,
       
       # Regression problem 
       objective = "regression",
@@ -559,8 +562,9 @@ bayes_opt_lgb <- function(data,
   
   
   bounds <- list(eta = eta,
-                 max_depth = max_depth
-                 ,num_leaves = num_leaves
+                 max_depth = max_depth,
+                 num_leaves = num_leaves,
+                 min_data_in_leaf = min_data_in_leaf
   )
   
   
@@ -686,7 +690,7 @@ bayes_opt_LSTM <- function(x,
                          epochs_lstm = 200,
                          earlystop = 8,
                          validation_split = 0.25,
-                         initPoints = 25,
+                         initPoints = 30,
                          epochs_opt = 15,
                          duplicate = FALSE){
   
@@ -864,7 +868,7 @@ bayes_opt_GRU <- function(x,
                            epochs_gru = 200,
                            earlystop = 8,
                            validation_split = 0.25,
-                           initPoints = 25,
+                           initPoints = 30,
                            epochs_opt = 15,
                            duplicate = FALSE){
   
@@ -1036,7 +1040,7 @@ bayes_opt_MLP <- function(x,
                           epochs_mlp = 200,
                           earlystop = 8,
                           validation_split = 0.25,
-                          initPoints = 25,
+                          initPoints = 30,
                           epochs_opt = 15,
                           duplicate = FALSE,
                           activation = "softmax"){
@@ -1341,12 +1345,29 @@ analyze_model <- function(measured,
     xgb.plot.importance(xgb.importance(model=model), top_n = 15)
     dev.off()
     
-    # create a QQ Plot
-    pdf(file = path3)
+    # create two QQ Plots next to each other
+    pdf(file = path3 , width = 14, height = 7)
+    par(mfrow = c(1, 2))
+    # qqplot based on percentiles
     plot(x=quantile(x=measured, probs = ((1:100)/100)),
          y=quantile(x=modeled, probs = ((1:100)/100)), 
-         xlab = "Measured", ylab = "Modeled", main = paste(catchment, "XGBoost", "QQ Plot"))
+         xlab = "Measured", ylab = "Modeled", main = paste(catchment, "XGBoost", "- QQ Plot Based on Percentiles"))
     lines(x=c(0,2000), y=c(0,2000))
+    abline(h=quantile(x=modeled, probs = 0.99))
+    text(x=quantile(x=measured, probs = 1)*0.9,
+         y=quantile(x=modeled, probs = 0.99),
+         pos = 3,
+         labels = expression(99^{t*h} ~ "Percentile"))
+    # ## plot based on all data points
+    qqplot(x=measured,
+           y=modeled, 
+           xlab = "Measured", ylab = "Modeled", main = paste(catchment, "XGBoost", "- QQ Plot Based on Data Points"))
+    lines(x=c(0,2000), y=c(0,2000))
+    abline(h=quantile(x=modeled, probs = 0.99))
+    text(x=quantile(x=measured, probs = 1)*0.9,
+         y=quantile(x=modeled, probs = 0.99),
+         pos = 3,
+         labels = expression(99^{t*h} ~ "Percentile"))
     dev.off()
     
   }
@@ -1392,12 +1413,29 @@ analyze_model <- function(measured,
     lgb.plot.importance(lgb.importance(model=model),top_n = 15)
     dev.off()
     
-    # create a QQ Plot
-    pdf(file = path3)
+    # create two QQ Plots next to each other
+    pdf(file = path3, width = 14, height = 7)
+    par(mfrow = c(1, 2))
+    # qqplot based on percentiles
     plot(x=quantile(x=measured, probs = ((1:100)/100)),
          y=quantile(x=modeled, probs = ((1:100)/100)), 
-         xlab = "Measured", ylab = "Modeled", main = paste(catchment, "LightGBM", "QQ Plot"))
+         xlab = "Measured", ylab = "Modeled", main = paste(catchment, "LightGBM", "- QQ Plot Based on Percentiles"))
     lines(x=c(0,2000), y=c(0,2000))
+    abline(h=quantile(x=modeled, probs = 0.99))
+    text(x=quantile(x=measured, probs = 1)*0.9,
+         y=quantile(x=modeled, probs = 0.99),
+         pos = 3,
+         labels = expression(99^{t*h} ~ "Percentile"))
+    # ## plot based on all data points
+    qqplot(x=measured,
+           y=modeled, 
+           xlab = "Measured", ylab = "Modeled", main = paste(catchment, "LightGBM", "- QQ Plot Based on Data Points"))
+    lines(x=c(0,2000), y=c(0,2000))
+    abline(h=quantile(x=modeled, probs = 0.99))
+    text(x=quantile(x=measured, probs = 1)*0.9,
+         y=quantile(x=modeled, probs = 0.99),
+         pos = 3,
+         labels = expression(99^{t*h} ~ "Percentile"))
     dev.off()
     
   }
@@ -1444,12 +1482,29 @@ analyze_model <- function(measured,
            lty = 1, col = c("chartreuse4", "blue", "red"))
     dev.off()
     
-    # create a QQ Plot
-    pdf(file = path2)
+    # create two QQ Plots next to each other
+    pdf(file = path3, width = 14, height = 7)
+    par(mfrow = c(1, 2))
+    # qqplot based on percentiles
     plot(x=quantile(x=measured, probs = ((1:100)/100)),
          y=quantile(x=modeled, probs = ((1:100)/100)), 
-         xlab = "Measured", ylab = "Modeled", main = paste(catchment, "LSTM", "QQ Plot"))
+         xlab = "Measured", ylab = "Modeled", main = paste(catchment, "LSTM", "- QQ Plot Based on Percentiles"))
     lines(x=c(0,2000), y=c(0,2000))
+    abline(h=quantile(x=modeled, probs = 0.99))
+    text(x=quantile(x=measured, probs = 1)*0.9,
+         y=quantile(x=modeled, probs = 0.99),
+         pos = 3,
+         labels = expression(99^{t*h} ~ "Percentile"))
+    # ## plot based on all data points
+    qqplot(x=measured,
+           y=modeled, 
+           xlab = "Measured", ylab = "Modeled", main = paste(catchment, "LSTM", "- QQ Plot Based on Data Points"))
+    lines(x=c(0,2000), y=c(0,2000))
+    abline(h=quantile(x=modeled, probs = 0.99))
+    text(x=quantile(x=measured, probs = 1)*0.9,
+         y=quantile(x=modeled, probs = 0.99),
+         pos = 3,
+         labels = expression(99^{t*h} ~ "Percentile"))
     dev.off()
     
   }
@@ -1496,12 +1551,29 @@ analyze_model <- function(measured,
            lty = 1, col = c("chartreuse4", "blue", "red"))
     dev.off()
     
-    # create a QQ Plot
-    pdf(file = path2)
+    # create two QQ Plots next to each other
+    pdf(file = path3, width = 14, height = 7)
+    par(mfrow = c(1, 2))
+    # qqplot based on percentiles
     plot(x=quantile(x=measured, probs = ((1:100)/100)),
          y=quantile(x=modeled, probs = ((1:100)/100)), 
-         xlab = "Measured", ylab = "Modeled", main = paste(catchment, "GRU", "QQ Plot"))
+         xlab = "Measured", ylab = "Modeled", main = paste(catchment, "GRU", "- QQ Plot Based on Percentiles"))
     lines(x=c(0,2000), y=c(0,2000))
+    abline(h=quantile(x=modeled, probs = 0.99))
+    text(x=quantile(x=measured, probs = 1)*0.9,
+         y=quantile(x=modeled, probs = 0.99),
+         pos = 3,
+         labels = expression(99^{t*h} ~ "Percentile"))
+    # ## plot based on all data points
+    qqplot(x=measured,
+           y=modeled, 
+           xlab = "Measured", ylab = "Modeled", main = paste(catchment, "GRU", "- QQ Plot Based on Data Points"))
+    lines(x=c(0,2000), y=c(0,2000))
+    abline(h=quantile(x=modeled, probs = 0.99))
+    text(x=quantile(x=measured, probs = 1)*0.9,
+         y=quantile(x=modeled, probs = 0.99),
+         pos = 3,
+         labels = expression(99^{t*h} ~ "Percentile"))
     dev.off()
     
   }
@@ -1544,12 +1616,29 @@ analyze_model <- function(measured,
            lty = 1, col = c("chartreuse4", "blue", "red"))
     dev.off()
     
-    # create a QQ Plot
-    pdf(file = path2)
+    # create two QQ Plots next to each other
+    pdf(file = path3, width = 14, height = 7)
+    par(mfrow = c(1, 2))
+    # qqplot based on percentiles
     plot(x=quantile(x=measured, probs = ((1:100)/100)),
          y=quantile(x=modeled, probs = ((1:100)/100)), 
-         xlab = "Measured", ylab = "Modeled", main = paste(catchment, "MLP", "QQ Plot"))
+         xlab = "Measured", ylab = "Modeled", main = paste(catchment, "MLP", "- QQ Plot Based on Percentiles"))
     lines(x=c(0,2000), y=c(0,2000))
+    abline(h=quantile(x=modeled, probs = 0.99))
+    text(x=quantile(x=measured, probs = 1)*0.9,
+         y=quantile(x=modeled, probs = 0.99),
+         pos = 3,
+         labels = expression(99^{t*h} ~ "Percentile"))
+    # ## plot based on all data points
+    qqplot(x=measured,
+           y=modeled, 
+           xlab = "Measured", ylab = "Modeled", main = paste(catchment, "MLP", "- QQ Plot Based on Data Points"))
+    lines(x=c(0,2000), y=c(0,2000))
+    abline(h=quantile(x=modeled, probs = 0.99))
+    text(x=quantile(x=measured, probs = 1)*0.9,
+         y=quantile(x=modeled, probs = 0.99),
+         pos = 3,
+         labels = expression(99^{t*h} ~ "Percentile"))
     dev.off()
     
   }
@@ -1589,12 +1678,29 @@ analyze_model <- function(measured,
            lty = 1, col = c("chartreuse4", "blue", "red"))
     dev.off()
     
-    # create a QQ Plot
-    pdf(file = path2)
+    # create two QQ Plots next to each other
+    pdf(file = path3, width = 14, height = 7)
+    par(mfrow = c(1, 2))
+    # qqplot based on percentiles
     plot(x=quantile(x=measured, probs = ((1:100)/100)),
          y=quantile(x=modeled, probs = ((1:100)/100)), 
-         xlab = "Measured", ylab = "Modeled", main = paste(catchment, "SVR", "QQ Plot"))
+         xlab = "Measured", ylab = "Modeled", main = paste(catchment, "SVR", "- QQ Plot Based on Percentiles"))
     lines(x=c(0,2000), y=c(0,2000))
+    abline(h=quantile(x=modeled, probs = 0.99))
+    text(x=quantile(x=measured, probs = 1)*0.9,
+         y=quantile(x=modeled, probs = 0.99),
+         pos = 3,
+         labels = expression(99^{t*h} ~ "Percentile"))
+    # ## plot based on all data points
+    qqplot(x=measured,
+           y=modeled, 
+           xlab = "Measured", ylab = "Modeled", main = paste(catchment, "SVR", "- QQ Plot Based on Data Points"))
+    lines(x=c(0,2000), y=c(0,2000))
+    abline(h=quantile(x=modeled, probs = 0.99))
+    text(x=quantile(x=measured, probs = 1)*0.9,
+         y=quantile(x=modeled, probs = 0.99),
+         pos = 3,
+         labels = expression(99^{t*h} ~ "Percentile"))
     dev.off()
     
   }
@@ -1635,12 +1741,29 @@ analyze_model <- function(measured,
            lty = 1, col = c("chartreuse4", "blue", "red"))
     dev.off()
     
-    # create a QQ Plot
-    pdf(file = path2)
+    # create two QQ Plots next to each other
+    pdf(file = path3, width = 14, height = 7)
+    par(mfrow = c(1, 2))
+    # qqplot based on percentiles
     plot(x=quantile(x=measured, probs = ((1:100)/100)),
          y=quantile(x=modeled, probs = ((1:100)/100)), 
-         xlab = "Measured", ylab = "Modeled", main = paste(catchment, "LM", "QQ Plot"))
+         xlab = "Measured", ylab = "Modeled", main = paste(catchment, "Linear Model", "- QQ Plot Based on Percentiles"))
     lines(x=c(0,2000), y=c(0,2000))
+    abline(h=quantile(x=modeled, probs = 0.99))
+    text(x=quantile(x=measured, probs = 1)*0.9,
+         y=quantile(x=modeled, probs = 0.99),
+         pos = 3,
+         labels = expression(99^{t*h} ~ "Percentile"))
+    # ## plot based on all data points
+    qqplot(x=measured,
+           y=modeled, 
+           xlab = "Measured", ylab = "Modeled", main = paste(catchment, "Liner Model", "- QQ Plot Based on Data Points"))
+    lines(x=c(0,2000), y=c(0,2000))
+    abline(h=quantile(x=modeled, probs = 0.99))
+    text(x=quantile(x=measured, probs = 1)*0.9,
+         y=quantile(x=modeled, probs = 0.99),
+         pos = 3,
+         labels = expression(99^{t*h} ~ "Percentile"))
     dev.off()
     
   }
