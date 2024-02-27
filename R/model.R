@@ -896,7 +896,7 @@ miny <- min(monthly_mod_data[,3:9])*0.9
 pdf(file = paste("../Results/Plots/monthly_discharge_mod_", catchment, ".pdf", sep = ""),width = 22, height = 7)
 par(mar = c(5, 4.3, 4, 2) + 0.1)
 plot(monthly_mod_data$measured, type = "l", col="black", ylim = c(miny,maxy), 
-     main = paste("Monthly Mean Discharge - Validation Period"), 
+     main = paste("Monthly Mean Discharge", catchment,"- Validation Period"), 
      ylab = expression(" Monthly Mean Discharge [" ~ m^{3}/s ~ "]"),
      xlab = "Validation Period",
      xaxt = "n",
