@@ -20,12 +20,15 @@
 # @ colnames:   vector containing all 4 exact strings: "date", "discharge", "precip", "temp"; arrange them matching your input data
 # @ start:      start year of the index vector generated for calibration validation
 # @ end:        end year of the index vector generated for calibration validation
+# @ datasplit:  setting for data splitting. 1 splits the data: calibration on even years, validation on odd. 50:50 split
+#                                           2 splits the data: repeating 2 years for calibration and 1 for validation. 2/3:1/3 split
 
 dataPrep <- function(data,
                      dateformat = "%Y-%m-%d", 
                      colname = c("date", "discharge", "precip", "temp"),
                      start = 1981,
-                     end = 2020) {
+                     end = 2020,
+                     datasplit = 2) {
   
   colnames(data) <- c("date", "discharge", "precip", "temp")
  
@@ -88,20 +91,33 @@ dataPrep <- function(data,
   # get a vector containing the year information from the date to split the data in calibration/validation period
   dat <- strptime(data$date, format = dateformat)
   dat.y <- year(dat)
- 
-  # create a vector where every third year is missing (used for validation later)
-  skp <- 1
-  count <- 0
-  skipunreg <- NA
-  for (i in start:end) {
-    count <- count + 1
-    if (skp!=3) {skipunreg[count]<-i; skp <- skp + 1}
-    else {skp <- 1}
-  }
+  select_year <- dat.y%in%start:end
+  data <- data[select_year,]
+  lh.filter <- lh.filter[select_year,]
+  dat <- dat[select_year]
+  dat.y <- dat.y[select_year]
   
+  if(datasplit==2){
+    # create a vector where every third year is missing (used for validation later)
+    skp <- 1
+    count <- 0
+    skipunreg <- NA
+    for (i in start:end) {
+      count <- count + 1
+      if (skp!=3) {skipunreg[count]<-i; skp <- skp + 1}
+      else {skp <- 1}
+    }
   skipunreg <- skipunreg[!is.na(skipunreg)]
   calib2 <- dat.y%in%skipunreg
   valid2 <- !calib2
+  }
+  
+  if(datasplit==1){
+    # Create a vector for calibration with data of even years and validation with data of odd years
+    calib2 <- rep(FALSE, times = length(dat))
+    calib2[dat.y%%2==0] <- TRUE
+    valid2 <- !calib2
+  }
   
   output <- list(data = data[,-1], 
                  date = dat, 
