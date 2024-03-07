@@ -97,50 +97,67 @@ source("functions.R")
 # catchment <- "Plessur Short Calibration"
 
 # Rosegbach Pontresina
-data <- read.table(file = "../Data/Discharge/muelchi_prio/CAMELS_CH_obs_based_2256.csv",
-                   header = TRUE, sep = ",")
-p.data <- dataPrep(data[,c(1,2,5,7)],
-                   datasplit = 1,
-                   start = 1984,
-                   end = 2015)
-catchment <- "Rosegbach Short Calibration"
+# data <- read.table(file = "../Data/Discharge/muelchi_prio/CAMELS_CH_obs_based_2256.csv",
+#                    header = TRUE, sep = ",")
+# p.data <- dataPrep(data[,c(1,2,5,7)],
+#                    datasplit = 1,
+#                    start = 1984,
+#                    end = 2015)
+# catchment <- "Rosegbach Short Calibration"
 
 # Venoge Ecublens
 # data <- read.table(file = "../Data/Discharge/muelchi_prio/CAMELS_CH_obs_based_2432.csv",
 #                    header = TRUE, sep = ",")
-# p.data <- dataPrep(data[,c(1,2,5,7)])
-# catchment <- "Venoge"
+# p.data <- dataPrep(data[,c(1,2,5,7)],
+#                   datasplit = 1,
+#                   start = 1984,
+#                   end = 2015)
+# catchment <- "Venoge Short Calibration"
 
 # Kander Hondrich
 # data <- read.table(file = "../Data/Discharge/muelchi_prio/CAMELS_CH_obs_based_2469.csv",
 #                    header = TRUE, sep = ",")
-# p.data <- dataPrep(data[,c(1,2,5,7)])
-# catchment <- "Kander"
+# p.data <- dataPrep(data[,c(1,2,5,7)],
+#                    datasplit = 1,
+#                    start = 1984,
+#                    end = 2015)
+# catchment <- "Kander Short Calibration"
 
 # Verzasca Lavertezzo
 # data <- read.table(file = "../Data/Discharge/muelchi_prio/CAMELS_CH_obs_based_2605.csv",
 #                    header = TRUE, sep = ",")
-# data <- tail(data, -3287)
-# p.data <- dataPrep(data[,c(1,2,5,7)])
-# catchment <- "Verzasca"
+# p.data <- dataPrep(data[,c(1,2,5,7)],
+#                    datasplit = 1,
+#                    start = 1990,
+#                    end = 2015)
+# catchment <- "Verzasca Short Calibration"
 
 # Ticino Bellinzona
 # data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2020.txt",
 #                      header = TRUE, sep = ";")
-# p.data <- dataPrep(data[,c(1,2,5,6)])
-# catchment <- "Ticino"
+# p.data <- dataPrep(data[,c(1,2,5,6)],
+#                    datasplit = 1,
+#                    start = 1984,
+#                    end = 2015)
+# catchment <- "Ticino Short Calibration"
 
-# Broy Payerne
+# Broye Payerne
 # data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2034.txt",
 #                      header = TRUE, sep = ";")
-# p.data <- dataPrep(data[,c(1,2,5,6)])
-# catchment <- "Broye_2"
+# p.data <- dataPrep(data[,c(1,2,5,6)],
+#                    datasplit = 1,
+#                    start = 1984,
+#                    end = 2015)
+# catchment <- "Broye Short Calibration"
 
 # Thur Andelfingen
-# data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2044.txt",
-#                    header = TRUE, sep = ";")
-# p.data <- dataPrep(data[,c(1,2,5,6)])
-# catchment <- "Thur"
+data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2044.txt",
+                   header = TRUE, sep = ";")
+p.data <- dataPrep(data[,c(1,2,5,6)],
+                   datasplit = 1,
+                   start = 1984,
+                   end = 2015)
+catchment <- "Thur Short Calibration"
 
 # Massa Blatten bei Naters ??
 # data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2161.txt",
@@ -449,14 +466,14 @@ dev.off()
 # Kander:   x = p.data$data[calib,c(3,4,11,16,19:29,31,32)]
 # Verzasca: x = p.data$data[calib,c(2:4,11,18:21,2:28,32)]
 
-svr_mod2 <- bayes_opt_SVR(x = p.data$data[calib,c(2:4,11,18:20,23:30)], 
+svr_mod2 <- bayes_opt_SVR(x = p.data$data[calib,c(4,5,11,19:26,30:32)], 
                           y = p.data$data[calib,1], 
                           cross = 5)
 svr_mod2$bayes_summary
 # svr_thur <- svr_mod2
 save(svr_mod2, file = paste("../Results/Models/", catchment, "_SVR.RData", sep = ""))
-psvr <- predict(object = svr_mod2$optimized_mod, newdata = p.data$data[valid,c(2:4,11,18:20,23:30)])
-psvr_c <- predict(object = svr_mod2$optimized_mod, newdata = p.data$data[calib,c(2:4,11,18:20,23:30)])
+psvr <- predict(object = svr_mod2$optimized_mod, newdata = p.data$data[valid,c(4,5,11,19:26,30:32)])
+psvr_c <- predict(object = svr_mod2$optimized_mod, newdata = p.data$data[calib,c(4,5,11,19:26,30:32)])
 
 
 svr_vdata <- analyze_model(measured = p.data$data$discharge[valid],
@@ -857,12 +874,12 @@ load(file = "../Results/Models/Thur_SVR.RData")
 load(file = "../Results/Models/Thur_XBoost.RData")
 
 
-load(file = "../Results/Models/Ticino_GRU.RData")
-load(file = "../Results/Models/Ticino_LightGBM.RData")
-load(file = "../Results/Models/Ticino_LSTM.RData")
-load(file = "../Results/Models/Ticino_MLP.RData")
-load(file = "../Results/Models/Ticino_SVR.RData")
-load(file = "../Results/Models/Ticino_XBoost.RData")
+load(file = "../Results/Models/Verzasca_GRU.RData")
+load(file = "../Results/Models/Verzasca_LightGBM.RData")
+load(file = "../Results/Models/Verzasca_LSTM.RData")
+load(file = "../Results/Models/Verzasca_MLP.RData")
+load(file = "../Results/Models/Verzasca_SVR.RData")
+load(file = "../Results/Models/Verzasca_XGBoost.RData")
 
 
 load(file = "../Results/Models/Broye_GRU.RData")
@@ -870,7 +887,7 @@ load(file = "../Results/Models/Broye_LightGBM.RData")
 load(file = "../Results/Models/Broye_LSTM.RData")
 load(file = "../Results/Models/Broye_MLP.RData")
 load(file = "../Results/Models/Broye_SVR.RData")
-load(file = "../Results/Models/Broye_XBoost.RData")
+load(file = "../Results/Models/Broye_XGBoost.RData")
 
 
 svr_mon_mean <- monthly_mean(measured = p.data$data$discharge[calib],
