@@ -81,7 +81,7 @@ source("functions.R")
 # Emme Emmenmatt
 # data <- read.table(file = "../Data/Discharge/muelchi_prio/CAMELS_CH_obs_based_2070.csv",
 #                    header = TRUE, sep = ",")
-# p.data <- dataPrep(data[,c(1,2,5,7)], 
+# p.data <- dataPrep(data[,c(1,2,5,7)],
 #                    datasplit = 1,
 #                    start = 1984,
 #                    end = 2015)
@@ -905,7 +905,7 @@ monthly_plot(data = svr_mon_mean,
 
 
 
-catchment <- "Venoge"
+catchment <- "Broye Short Calibration"
 
 mod_data <- read.table(file = paste("../Results/Models/modeled_discharge_",catchment, ".txt", sep = ""), 
                        sep = ";", header = TRUE)
@@ -944,6 +944,37 @@ lines(monthly_mod_na$lstm, col = "darkgreen")
 lines(monthly_mod_na$gru, col = "springgreen3")
 lines(monthly_mod_na$svr, col = "saddlebrown")
 
+legend("topright", legend = c("Measured", "XGBoost", "LightGBM", "MLP", "LSTM", "GRU", "SVR"), bty = "n", 
+       lty = 1, lwd = 2, col = c("black", "red", "mediumvioletred", "darkorange2", 
+                                 "darkgreen", "springgreen3", "saddlebrown"))
+dev.off()
+
+
+########################################
+########################################
+
+
+catchment <- "Thur"
+
+mod_data <- read.table(file = paste("../Results/Models/modeled_discharge_",catchment, ".txt", sep = ""), 
+                       sep = ";", header = TRUE)
+mod_data$date <- strptime(mod_data$date, format = "%Y-%m-%d")
+
+maxy <- max(mod_data[2281:2401,2:8])*1.1
+miny <- min(mod_data[2281:2401,2:8])*0.9
+pdf(file = paste("../Results/Plots/daily_discharge_mod_", catchment, ".pdf", sep = ""),width = 22, height = 7)
+par(mar = c(5, 4.3, 4, 2) + 0.1)
+plot(x= mod_data$date[2281:2401], y= mod_data$measured[2281:2401], type = "l",
+     xlab = "Year 2001",
+     ylab = expression("Discharge [" ~ m^{3}/s ~ "]"),
+     ylim = c(miny,maxy),
+     lwd=2)
+lines(x= mod_data$date[2281:2401], y=mod_data$xgboost[2281:2401], col = "red")
+lines(x= mod_data$date[2281:2401], y=mod_data$lightgbm[2281:2401], col = "mediumvioletred")
+lines(x= mod_data$date[2281:2401],mod_data$mlp[2281:2401], col = "darkorange2")
+lines(x= mod_data$date[2281:2401],mod_data$lstm[2281:2401], col = "darkgreen")
+lines(x= mod_data$date[2281:2401],mod_data$gru[2281:2401], col = "springgreen3")
+lines(x= mod_data$date[2281:2401],mod_data$svr[2281:2401], col = "saddlebrown")
 legend("topright", legend = c("Measured", "XGBoost", "LightGBM", "MLP", "LSTM", "GRU", "SVR"), bty = "n", 
        lty = 1, lwd = 2, col = c("black", "red", "mediumvioletred", "darkorange2", 
                                  "darkgreen", "springgreen3", "saddlebrown"))
