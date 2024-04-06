@@ -157,7 +157,7 @@ p.data <- dataPrep(data[,c(1,2,5,6)],
                    datasplit = 1,
                    start = 1984,
                    end = 2015)
-catchment <- "Thur Short Calibration"
+catchment <- "NSE Thur Short Calibration"
 
 # Massa Blatten bei Naters ??
 # data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2161.txt",
@@ -980,3 +980,40 @@ legend("topright", legend = c("Measured", "XGBoost", "LightGBM", "MLP", "LSTM", 
                                  "darkgreen", "springgreen3", "saddlebrown"))
 dev.off()
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+model <- keras_model_sequential() 
+model %>% 
+#  layer_input(shape = 32) %>%
+  layer_dense(units = 130, activation = 'softplus') %>% 
+  layer_dropout(rate = 0.1) %>% 
+  layer_dense(units = 130, activation = 'softplus') %>%
+  layer_dropout(rate = 0.1) %>% 
+  layer_dense(units = 130, activation = 'softplus') %>%
+  layer_dense(units = 1)
+
+  model %>% keras::compile(loss = loss_NSE, # "mse" loss_NSE
+                 optimizer = "adam")  #"sdg" "adam"
+history <- model%>%fit(x=h.data.scale[calib,-1],y=h.data.scale[calib,1], epochs = 30, batch_size = 5, validation_split = 0.2)
+test<- matrix(1:12,3,4)
+test
+loss_NSE(test,test)

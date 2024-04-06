@@ -262,6 +262,23 @@ NSE <- function(mod,obs){
   return(output)
 }
 
+########################################
+# NSE loss-function
+########################################
+
+# Function to calculate the Nash-Sutcliffe-Efficiency 
+
+# @ mod: Vector with modeled values 
+# @ obs: Vector with observation values
+
+loss_NSE <- function(y_true=matrix(0,1,1),y_pred=matrix(0,1,1)){
+  obs <- y_true
+  mod <- y_pred
+  obsm <- mean(obs)
+  output <- (sum((obs-mod)^2)/sum((obs-obsm)^2))
+  if(output==-Inf){output <- 99}
+  return(mean(output))
+}
 
 ########################################
 # KGE function
@@ -1052,7 +1069,7 @@ create_MLP <- function(layers,
   }
   output <- output %>% layer_dense(units = 1)
   model <- keras_model(input, output) %>%
-    keras::compile(loss = "mse",
+    keras::compile(loss = "mse", # "mse" loss_NSE
                    optimizer = optimizer_adam(learning_rate = learningr))  #"sdg" "adam"
   return(model)
 }
