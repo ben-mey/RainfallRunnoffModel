@@ -79,7 +79,7 @@ setwd(wd)
 source("functions.R")
 
 # Emme Emmenmatt
-# data <- read.table(file = "../Data/Discharge/muelchi_prio/CAMELS_CH_obs_based_2070.csv",
+# data <- read.table(file = "../Data/CAMELS_CH_obs_based_2070.csv",
 #                    header = TRUE, sep = ",")
 # p.data <- dataPrep(data[,c(1,2,5,7)],
 #                    datasplit = 1,
@@ -88,7 +88,7 @@ source("functions.R")
 # catchment <- "Emme Short Calibration"
 
 # Plessur Chrur
-# data <- read.table(file = "../Data/Discharge/muelchi_prio/CAMELS_CH_obs_based_2185.csv",
+# data <- read.table(file = "../Data/CAMELS_CH_obs_based_2185.csv",
 #                    header = TRUE, sep = ",")
 # p.data <- dataPrep(data[,c(1,2,5,7)],
 #                    datasplit = 1,
@@ -97,7 +97,7 @@ source("functions.R")
 # catchment <- "Plessur Short Calibration"
 
 # Rosegbach Pontresina
-# data <- read.table(file = "../Data/Discharge/muelchi_prio/CAMELS_CH_obs_based_2256.csv",
+# data <- read.table(file = "../Data/CAMELS_CH_obs_based_2256.csv",
 #                    header = TRUE, sep = ",")
 # p.data <- dataPrep(data[,c(1,2,5,7)],
 #                    datasplit = 1,
@@ -106,7 +106,7 @@ source("functions.R")
 # catchment <- "Rosegbach Short Calibration"
 
 # Venoge Ecublens
-# data <- read.table(file = "../Data/Discharge/muelchi_prio/CAMELS_CH_obs_based_2432.csv",
+# data <- read.table(file = "../Data/CAMELS_CH_obs_based_2432.csv",
 #                    header = TRUE, sep = ",")
 # p.data <- dataPrep(data[,c(1,2,5,7)],
 #                   datasplit = 1,
@@ -115,7 +115,7 @@ source("functions.R")
 # catchment <- "Venoge Short Calibration"
 
 # Kander Hondrich
-# data <- read.table(file = "../Data/Discharge/muelchi_prio/CAMELS_CH_obs_based_2469.csv",
+# data <- read.table(file = "../Data/CAMELS_CH_obs_based_2469.csv",
 #                    header = TRUE, sep = ",")
 # p.data <- dataPrep(data[,c(1,2,5,7)],
 #                    datasplit = 1,
@@ -124,7 +124,7 @@ source("functions.R")
 # catchment <- "Kander Short Calibration"
 
 # Verzasca Lavertezzo
-# data <- read.table(file = "../Data/Discharge/muelchi_prio/CAMELS_CH_obs_based_2605.csv",
+# data <- read.table(file = "../Data/CAMELS_CH_obs_based_2605.csv",
 #                    header = TRUE, sep = ",")
 # p.data <- dataPrep(data[,c(1,2,5,7)],
 #                    datasplit = 1,
@@ -133,7 +133,7 @@ source("functions.R")
 # catchment <- "Verzasca Short Calibration"
 
 # Ticino Bellinzona
-# data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2020.txt",
+# data <- read.table(file = "../Data/CAMELS_CH_obs_based_2020.txt",
 #                      header = TRUE, sep = ";")
 # p.data <- dataPrep(data[,c(1,2,5,6)],
 #                    datasplit = 1,
@@ -142,7 +142,7 @@ source("functions.R")
 # catchment <- "Ticino Short Calibration"
 
 # Broye Payerne
-# data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2034.txt",
+# data <- read.table(file = "../Data/CAMELS_CH_obs_based_2034.txt",
 #                      header = TRUE, sep = ";")
 # p.data <- dataPrep(data[,c(1,2,5,6)],
 #                    datasplit = 1,
@@ -151,7 +151,7 @@ source("functions.R")
 # catchment <- "Broye Short Calibration"
 
 # Thur Andelfingen
-data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2044.txt",
+data <- read.table(file = "../Data/CAMELS_CH_obs_based_2044.txt",
                    header = TRUE, sep = ";")
 p.data <- dataPrep(data[,c(1,2,5,6)],
                    datasplit = 1,
@@ -159,23 +159,7 @@ p.data <- dataPrep(data[,c(1,2,5,6)],
                    end = 2015)
 catchment <- "NSE Thur Short Calibration"
 
-# Massa Blatten bei Naters ??
-# data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2161.txt",
-#                    header = TRUE, sep = ";")
-# p.data <- dataPrep(data[,c(1,2,5,6)])
-# catchment <- "Massa"
 
-# Weisse Lütschine Zweilütschinen ??
-# data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2200.txt",
-#                    header = TRUE, sep = ";")
-# p.data <- dataPrep(data[,c(1,2,5,6)])
-# catchment <- "Weisse Lütschine"
-
-# Dischmabach Davos ??
-# data <- read.table(file = "../Data/Discharge/1 - priority/CAMELS_CH_obs_based_2327.txt",
-#                    header = TRUE, sep = ";")
-# p.data <- dataPrep(data[,c(1,2,5,6)])
-# catchment <- "Dischmabach"
 
 
 calib <- p.data$calib
